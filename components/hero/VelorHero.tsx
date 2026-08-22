@@ -1,3 +1,4 @@
+import LazyVelorCanvas from "@/components/3d/VelorCanvasLazy";
 import HeroActions from "./HeroActions";
 import HeroDataRail from "./HeroDataRail";
 
@@ -86,6 +87,8 @@ export default function VelorHero() {
             aria-hidden="true"
           >
             <div className="absolute inset-0 border border-border-subtle">
+              <LazyVelorCanvas />
+
               <div
                 className="absolute inset-0 pointer-events-none opacity-30"
                 style={{
