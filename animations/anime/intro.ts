@@ -23,11 +23,11 @@ export function runIntro(root: HTMLElement | null): IntroContext | null {
 
   const nav = resolveTargets(root, "[data-shell-nav]");
   const ticker = resolveTargets(root, "[data-shell-ticker]");
-  const heroLabel = resolveTargets(root, "[data-shell-hero-label]");
-  const heroHeadline = resolveTargets(root, "[data-shell-hero-headline]");
-  const heroCopy = resolveTargets(root, "[data-shell-hero-copy]");
-  const heroAction = resolveTargets(root, "[data-shell-hero-action]");
-  const heroData = resolveTargets(root, "[data-shell-hero-data]");
+  const heroLabel = resolveTargets(root, "[data-hero-label]");
+  const heroHeadline = resolveTargets(root, "[data-hero-headline]");
+  const heroCopy = resolveTargets(root, "[data-hero-copy]");
+  const heroDataRail = resolveTargets(root, "[data-hero-data-rail]");
+  const envBg = resolveTargets(root, "[data-hero-env-bg]");
 
   timeline
     .add(root, { opacity: [0, 1], duration: 600 })
@@ -36,8 +36,8 @@ export function runIntro(root: HTMLElement | null): IntroContext | null {
     .add(heroLabel, { opacity: [0, 1], translateY: [8, 0], duration: 500 }, "-=300")
     .add(heroHeadline, { opacity: [0, 1], translateY: [12, 0], duration: 700 }, "-=200")
     .add(heroCopy, { opacity: [0, 1], translateY: [8, 0], duration: 500 }, "-=400")
-    .add(heroAction, { opacity: [0, 1], translateY: [4, 0], duration: 500 }, "-=300")
-    .add(heroData, { opacity: [0, 1], translateY: [4, 0], duration: 500 }, "-=300");
+    .add(envBg, { opacity: [0, 0.4], duration: 1000 }, "-=500")
+    .add(heroDataRail, { opacity: [0, 1], translateY: [4, 0], duration: 500 }, "-=700");
 
   return {
     revert: () => timeline.revert(),
