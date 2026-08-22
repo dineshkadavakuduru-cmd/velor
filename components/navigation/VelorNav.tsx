@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, Search, User } from "lucide-react";
 import { motion, type Variants, AnimatePresence } from "motion/react";
 import { navHover } from "@/animations/motion/transitions";
@@ -22,6 +22,15 @@ const menuVariants: Variants = {
 
 export default function VelorNav() {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
 
   return (
     <>

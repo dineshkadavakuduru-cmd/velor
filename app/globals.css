@@ -120,6 +120,12 @@ body {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .live-indicator::before {
+    animation: none;
+  }
+}
+
 .data-number {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

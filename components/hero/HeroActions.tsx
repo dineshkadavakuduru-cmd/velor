@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, type Variants } from "motion/react";
-import type { ReactNode } from "react";
 
 const buttonVariants: Variants = {
   rest: { scale: 1 },
