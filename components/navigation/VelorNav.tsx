@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Menu, Search, User } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Menu, X, Search } from "lucide-react";
 import { motion, type Variants, AnimatePresence } from "motion/react";
-import { navHover } from "@/animations/motion/transitions";
 
-const NAV_LINKS = ["LIVE", "MATCHES", "TEAMS", "PLAYERS", "LEAGUES"];
+const NAV_LINKS = [
+  { label: "LIVE", href: "/live" },
+  { label: "MATCHES", href: "/matches" },
+  { label: "TEAMS", href: "/teams" },
+  { label: "LEAGUES", href: "/leagues" },
+  { label: "FAVORITES", href: "/favorites" },
+  { label: "SEARCH", href: "/search" },
+];
 
 const menuVariants: Variants = {
   closed: {
@@ -20,16 +28,58 @@ const menuVariants: Variants = {
   },
 };
 
+function isActiveRoute(pathname: string, href: string): boolean {
+  if (href === "/live") return pathname === "/live";
+  if (href === "/matches") return pathname === "/matches";
+  if (href === "/teams") return pathname === "/teams";
+  if (href === "/leagues") return pathname === "/leagues";
+  if (href === "/favorites") return pathname === "/favorites";
+  if (href === "/search") return pathname === "/search";
+  return false;
+}
+
 export default function VelorNav() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        return;
+      }
+      if (e.key === "Tab" && menuRef.current) {
+        const focusable = menuRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const firstFocusable = menuRef.current?.querySelector<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    firstFocusable?.focus();
   }, [menuOpen]);
 
   return (
@@ -41,67 +91,55 @@ export default function VelorNav() {
       >
         <div className="flex items-center justify-between h-16 px-6 lg:px-10">
           <div className="flex items-center">
-            <span className="font-display text-lg font-medium tracking-[0.2em] text-text-primary">
+            <Link href="/" className="font-display text-lg font-medium tracking-[0.2em] text-text-primary hover:text-live transition-colors">
               VELOR
-            </span>
+            </Link>
           </div>
 
           <div className="hidden md:flex items-center gap-8">
-            {NAV_LINKS.map((link) => (
-              <motion.a
-                key={link}
-                href="#"
-                className="font-mono text-xs font-medium tracking-widest text-text-secondary"
-                variants={navHover}
-                initial="rest"
-                whileHover="hover"
-                transition={{ duration: 0.2 }}
-              >
-                {link}
-              </motion.a>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const active = isActiveRoute(pathname, link.href);
+              return (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className={`font-mono text-xs font-medium tracking-widest transition-colors ${
+                    active
+                      ? "text-live"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {link.label}
+                  {active && (
+                    <span className="block h-px bg-live mt-1" aria-hidden="true" />
+                  )}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-5">
             <div className="live-indicator">
               <span>LIVE</span>
-              <span className="text-text-secondary normal-case tracking-normal text-xs">
-                12 MATCHES
-              </span>
             </div>
 
-            <motion.button
-              type="button"
-              className="hidden md:flex text-text-secondary hover:text-text-primary"
+            <Link
+              href="/search"
+              className="hidden md:flex text-text-secondary hover:text-text-primary transition-colors"
               aria-label="Search"
-              variants={navHover}
-              initial="rest"
-              whileHover="hover"
-              transition={{ duration: 0.2 }}
             >
               <Search className="w-4 h-4" />
-            </motion.button>
+            </Link>
 
             <button
               type="button"
-              className="md:hidden text-text-secondary hover:text-text-primary"
+              className="md:hidden text-text-secondary hover:text-text-primary transition-colors"
               aria-label="Open menu"
+              aria-expanded={menuOpen}
               onClick={() => setMenuOpen(true)}
             >
               <Menu className="w-5 h-5" />
             </button>
-
-            <motion.button
-              type="button"
-              className="hidden md:flex text-text-secondary hover:text-text-primary"
-              aria-label="Profile menu"
-              variants={navHover}
-              initial="rest"
-              whileHover="hover"
-              transition={{ duration: 0.2 }}
-            >
-              <User className="w-4 h-4" />
-            </motion.button>
           </div>
         </div>
       </nav>
@@ -109,23 +147,27 @@ export default function VelorNav() {
       <AnimatePresence>
         {menuOpen && (
           <motion.div
+            ref={menuRef}
             className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm md:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
           >
             <div className="flex items-center justify-between h-16 px-6">
-              <span className="font-display text-lg font-medium tracking-[0.2em] text-text-primary">
+              <Link href="/" className="font-display text-lg font-medium tracking-[0.2em] text-text-primary hover:text-live transition-colors" onClick={() => setMenuOpen(false)}>
                 VELOR
-              </span>
+              </Link>
               <button
                 type="button"
                 className="text-text-secondary hover:text-text-primary"
                 aria-label="Close menu"
                 onClick={() => setMenuOpen(false)}
               >
-                <Menu className="w-5 h-5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
             <motion.div
@@ -135,16 +177,23 @@ export default function VelorNav() {
               animate="open"
               transition={{ duration: 0.2 }}
             >
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link}
-                  href="#"
-                  className="font-mono text-sm font-medium tracking-widest text-text-secondary hover:text-text-primary transition-colors"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {link}
-                </a>
-              ))}
+              {NAV_LINKS.map((link) => {
+                const active = isActiveRoute(pathname, link.href);
+                return (
+                  <Link
+                    key={link.label}
+                    href={link.href}
+                    className={`font-mono text-sm font-medium tracking-widest transition-colors ${
+                      active
+                        ? "text-live"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
             </motion.div>
           </motion.div>
         )}

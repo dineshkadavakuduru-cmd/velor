@@ -2,6 +2,13 @@ import LazyVelorCanvas from "@/components/3d/VelorCanvasLazy";
 import HeroActions from "./HeroActions";
 import HeroDataRail from "./HeroDataRail";
 
+interface VelorHeroProps {
+  liveCount?: number;
+  matchCount?: number;
+  leagueCount?: number;
+  teamCount?: number;
+}
+
 const ENV_LABELS = [
   { text: "SYSTEM / LIVE", top: "3%", right: "3%", bottom: undefined, left: undefined },
   { text: "DATA STREAM / 04", top: undefined, right: "3%", bottom: "3%", left: undefined },
@@ -9,7 +16,7 @@ const ENV_LABELS = [
   { text: "SYNC / ACTIVE", top: "3%", right: undefined, bottom: undefined, left: "3%" },
 ];
 
-export default function VelorHero() {
+export default function VelorHero({ liveCount = 0, matchCount = 0, leagueCount = 0, teamCount = 0 }: VelorHeroProps) {
   return (
     <section className="relative flex-1 flex items-center min-h-[calc(100vh-8rem)]">
       <div className="absolute inset-0 bg-background" />
@@ -75,7 +82,7 @@ export default function VelorHero() {
               <div className="live-indicator mt-8">
                 <span>LIVE</span>
                 <span className="text-text-secondary normal-case tracking-normal text-xs">
-                  12 MATCHES
+                  SPORTS INTELLIGENCE
                 </span>
               </div>
             </div>
@@ -126,42 +133,15 @@ export default function VelorHero() {
             </div>
           </div>
         </div>
-
-        <div className="hidden lg:block absolute bottom-8 right-6">
-          <div
-            className="flex items-stretch border border-border-subtle"
-            aria-hidden="true"
-          >
-            <div className="px-4 py-3 border-r border-border-subtle">
-              <div className="technical-label">LIVE</div>
-              <div className="data-number text-base mt-0.5 text-text-primary">
-                24/7
-              </div>
-            </div>
-            <div className="px-4 py-3 border-r border-border-subtle">
-              <div className="technical-label">MATCHES</div>
-              <div className="data-number text-base mt-0.5 text-text-primary">
-                1,284
-              </div>
-            </div>
-            <div className="px-4 py-3 border-r border-border-subtle">
-              <div className="technical-label">LEAGUES</div>
-              <div className="data-number text-base mt-0.5 text-text-primary">
-                42
-              </div>
-            </div>
-            <div className="px-4 py-3">
-              <div className="technical-label">STATUS</div>
-              <div className="data-number text-base mt-0.5 text-text-primary">
-                ONLINE
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 lg:hidden" data-hero-data-rail>
-        <HeroDataRail />
+        <HeroDataRail
+          liveCount={liveCount}
+          matchCount={matchCount}
+          leagueCount={leagueCount}
+          teamCount={teamCount}
+        />
       </div>
 
       <div

@@ -1,6 +1,9 @@
 "use client";
 
 import { motion, type Variants } from "motion/react";
+import Link from "next/link";
+
+const MotionLink = motion.create(Link);
 
 const buttonVariants: Variants = {
   rest: { scale: 1 },
@@ -15,8 +18,8 @@ const secondaryVariants: Variants = {
 };
 
 export default function HeroActions({
-  primaryHref = "#explore",
-  secondaryHref = "#matches",
+  primaryHref = "/live",
+  secondaryHref = "/matches",
 }: {
   primaryHref?: string;
   secondaryHref?: string;
@@ -26,7 +29,7 @@ export default function HeroActions({
       className="flex flex-col sm:flex-row items-start sm:items-center gap-4"
       data-hero-actions
     >
-      <motion.a
+      <MotionLink
         href={primaryHref}
         variants={buttonVariants}
         initial="rest"
@@ -36,9 +39,9 @@ export default function HeroActions({
         className="inline-flex items-center gap-2.5 px-7 py-3.5 bg-text-primary text-background font-mono text-xs font-medium tracking-[0.2em]"
       >
         EXPLORE LIVE
-      </motion.a>
+      </MotionLink>
 
-      <motion.a
+      <MotionLink
         href={secondaryHref}
         variants={secondaryVariants}
         initial="rest"
@@ -49,7 +52,7 @@ export default function HeroActions({
       >
         <span className="w-4 h-px bg-text-secondary" />
         VIEW MATCHES
-      </motion.a>
+      </MotionLink>
     </div>
   );
 }

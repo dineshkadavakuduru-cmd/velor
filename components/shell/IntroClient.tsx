@@ -17,5 +17,5 @@ export default function IntroClient({
     };
   }, []);
 
-  return <div ref={rootRef} style={{ opacity: 0 }}>{children}</div>;
+  return <div ref={rootRef} style={{ opacity: 1 }}>{children}</div>;
 }
