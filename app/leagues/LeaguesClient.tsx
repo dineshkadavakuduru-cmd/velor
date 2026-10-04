@@ -5,12 +5,22 @@ import type { League } from "@/lib/types/sports";
 import LiveHeader from "@/components/live/LiveHeader";
 import LeagueCard from "@/components/ui/LeagueCard";
 import EmptyState from "@/components/ui/EmptyState";
+import DataFreshness from "@/components/ui/DataFreshness";
+import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 
 interface LeaguesClientProps {
   initialLeagues: League[];
+  syncedAt: string;
+  degraded?: boolean;
+  unavailableSports?: { id: string; name: string; errorKind?: string }[];
 }
 
-export default function LeaguesClient({ initialLeagues }: LeaguesClientProps) {
+export default function LeaguesClient({
+  initialLeagues,
+  syncedAt,
+  degraded = false,
+  unavailableSports = [],
+}: LeaguesClientProps) {
   const [search, setSearch] = useState("");
   const [activeSport, setActiveSport] = useState<string | null>(null);
 
@@ -48,6 +58,12 @@ export default function LeaguesClient({ initialLeagues }: LeaguesClientProps) {
         matchCount={leagues.length}
         countLabel="LEAGUES"
       />
+      <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30 flex flex-col gap-1">
+        <DataFreshness syncedAt={syncedAt} degraded={degraded} />
+        {unavailableSports.length > 0 && (
+          <UnavailableSportsNote sports={unavailableSports} />
+        )}
+      </div>
       <div className="px-4 sm:px-6 lg:px-10 py-4 border-b border-border-subtle">
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex flex-col gap-1.5 flex-1 min-w-0">
@@ -88,11 +104,13 @@ export default function LeaguesClient({ initialLeagues }: LeaguesClientProps) {
       <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         {leagues.length === 0 ? (
           <EmptyState
-            title="NO LEAGUES FOUND"
+            title={unavailableSports.length > 0 ? "LEAGUE DATA UNAVAILABLE" : "NO LEAGUES FOUND"}
             description={
               search
                 ? "No leagues match your search. Try a different term."
-                : "No leagues available at the moment."
+                : unavailableSports.length > 0
+                  ? `League data could not be loaded for: ${unavailableSports.map((s) => s.name).join(", ")}. Please try again later.`
+                  : "No leagues available at the moment."
             }
           />
         ) : (

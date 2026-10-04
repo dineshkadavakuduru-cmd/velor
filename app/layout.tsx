@@ -23,19 +23,42 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://velor-omega.vercel.app";
+const SITE_NAME = "VELOR";
+const SITE_TITLE = "VELOR — Live Sports Intelligence";
+const SITE_DESCRIPTION =
+  "Premium live-sports command center — scores, schedules, standings, and live events.";
+
 export const metadata: Metadata = {
-  title: "VELOR — Live Sports Intelligence",
-  description: "Premium live-sports command center — scores, schedules, standings, and live events.",
-  metadataBase: new URL("https://velor.app"),
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_TITLE,
+    template: "%s — VELOR",
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: "VELOR — Live Sports Intelligence",
-    description: "Premium live-sports command center — scores, schedules, standings, and live events.",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: SITE_NAME,
     type: "website",
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "VELOR — Live Sports Intelligence",
-    description: "Premium live-sports command center — scores, schedules, standings, and live events.",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  icons: {
+    icon: "/icon.svg",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
@@ -55,8 +78,16 @@ export default function RootLayout({
       `}
     >
       <body className="min-h-full flex flex-col bg-background">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:px-4 focus:py-2 focus:bg-surface-2 focus:text-live focus:font-mono focus:text-xs focus:tracking-widest"
+        >
+          SKIP TO CONTENT
+        </a>
         <VelorNav />
-        <div className="flex-1">{children}</div>
+        <main id="main-content" className="flex-1">
+          {children}
+        </main>
         <VelorFooter />
       </body>
     </html>

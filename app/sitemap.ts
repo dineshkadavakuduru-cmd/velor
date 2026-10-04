@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://velor.app";
+  const baseUrl = "https://velor-omega.vercel.app";
   const routes = [
     "",
     "/live",

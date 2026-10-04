@@ -1,7 +1,5 @@
 import { Suspense } from "react";
-import { createRegistry } from "@/lib/api";
-import { getEnabledSports } from "@/lib/api/sports";
-import type { Match } from "@/lib/types/sports";
+import { getSportsSnapshot } from "@/lib/api/snapshot";
 import LiveHeader from "@/components/live/LiveHeader";
 import LiveFeedClient from "@/components/live/LiveFeedClient";
 import ErrorState from "@/components/ui/ErrorState";
@@ -11,30 +9,6 @@ export const metadata = {
   title: "Live — VELOR",
   description: "Live scores and match updates.",
 };
-
-async function getLiveMatches(): Promise<Match[]> {
-  const registry = createRegistry();
-  const sports = getEnabledSports();
-  const results = await Promise.allSettled(
-    sports.map((sport) => registry.getProvider(sport.id).getLiveMatches())
-  );
-  const matches: Match[] = [];
-  let atLeastOneSuccess = false;
-
-  for (const result of results) {
-    if (result.status === "fulfilled") {
-      atLeastOneSuccess = true;
-      matches.push(...result.value);
-    }
-  }
-
-  if (!atLeastOneSuccess && sports.length > 0) {
-    const firstReject = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-    throw firstReject?.reason ?? new Error("SPORTS_DATA_UNAVAILABLE");
-  }
-
-  return matches;
-}
 
 function ProviderUnavailable() {
   return (
@@ -94,26 +68,30 @@ export default function LivePage() {
 }
 
 async function LiveMatches() {
-  let matches: Match[] = [];
-  let hasError = false;
-  let misconfigured = false;
-
+  let snapshot;
   try {
-    matches = await getLiveMatches();
-  } catch (error) {
-    hasError = true;
-    if (error instanceof Error && error.message.includes("VELOR_API_SPORTS_KEY")) {
-      misconfigured = true;
-    }
-  }
-
-  if (misconfigured) {
-    return <ProviderMisconfigured />;
-  }
-
-  if (hasError) {
+    // Canonical dataset: /live derives live matches from the SAME normalized
+    // snapshot as /matches and the homepage — never a separate live endpoint
+    // call that can disagree with the rest of the product.
+    snapshot = await getSportsSnapshot();
+  } catch {
     return <ProviderUnavailable />;
   }
 
-  return <LiveFeedClient initialMatches={matches} />;
+  if (snapshot.misconfigured) {
+    return <ProviderMisconfigured />;
+  }
+
+  if (!snapshot.hasAnySuccess) {
+    return <ProviderUnavailable />;
+  }
+
+  return (
+    <LiveFeedClient
+      initialMatches={snapshot.matches}
+      syncedAt={snapshot.syncedAt}
+      degraded={snapshot.degraded}
+      unavailableSports={snapshot.unavailableSports}
+    />
+  );
 }

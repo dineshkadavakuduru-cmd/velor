@@ -5,12 +5,24 @@ import type { Team } from "@/lib/types/sports";
 import LiveHeader from "@/components/live/LiveHeader";
 import TeamCard from "@/components/ui/TeamCard";
 import EmptyState from "@/components/ui/EmptyState";
+import DataFreshness from "@/components/ui/DataFreshness";
+import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 
 interface TeamsClientProps {
   initialTeams: Team[];
+  syncedAt: string;
+  degraded?: boolean;
+  unavailableSports?: { id: string; name: string; errorKind?: string }[];
+  teamsDerivedFromMatches?: boolean;
 }
 
-export default function TeamsClient({ initialTeams }: TeamsClientProps) {
+export default function TeamsClient({
+  initialTeams,
+  syncedAt,
+  degraded = false,
+  unavailableSports = [],
+  teamsDerivedFromMatches = false,
+}: TeamsClientProps) {
   const [search, setSearch] = useState("");
   const [activeSport, setActiveSport] = useState<string | null>(null);
 
@@ -49,6 +61,17 @@ export default function TeamsClient({ initialTeams }: TeamsClientProps) {
         matchCount={teams.length}
         countLabel="TEAMS"
       />
+      <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30 flex flex-col gap-1">
+        <DataFreshness syncedAt={syncedAt} degraded={degraded} />
+        {teamsDerivedFromMatches && teams.length > 0 && (
+          <p className="text-[0.65rem] text-text-secondary font-mono tracking-widest uppercase">
+            Team directory derived from today&apos;s fixtures — full directory unavailable.
+          </p>
+        )}
+        {unavailableSports.length > 0 && (
+          <UnavailableSportsNote sports={unavailableSports} />
+        )}
+      </div>
       <div className="px-4 sm:px-6 lg:px-10 py-4 border-b border-border-subtle">
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex flex-col gap-1.5 flex-1 min-w-0">
@@ -89,11 +112,13 @@ export default function TeamsClient({ initialTeams }: TeamsClientProps) {
       <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         {teams.length === 0 ? (
           <EmptyState
-            title="NO TEAMS FOUND"
+            title={unavailableSports.length > 0 ? "TEAM DATA UNAVAILABLE" : "NO TEAMS FOUND"}
             description={
               search || activeSport
                 ? "No teams match your filters. Try different criteria."
-                : "No teams available at the moment."
+                : unavailableSports.length > 0
+                  ? `Team data could not be loaded for: ${unavailableSports.map((s) => s.name).join(", ")}. Please try again later.`
+                  : "No teams available at the moment."
             }
           />
         ) : (

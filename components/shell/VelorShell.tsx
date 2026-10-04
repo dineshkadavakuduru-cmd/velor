@@ -1,7 +1,6 @@
 import { Suspense } from "react";
-import { createRegistry } from "@/lib/api";
-import { getEnabledSports } from "@/lib/api/sports";
-import type { Match, Team, League } from "@/lib/types/sports";
+import { getSportsSnapshot, rankFeaturedLeagues, rankFeaturedTeams } from "@/lib/api/snapshot";
+import type { Match } from "@/lib/types/sports";
 import IntroClient from "./IntroClient";
 import VelorHero from "../hero/VelorHero";
 import MatchCard from "../ui/MatchCard";
@@ -10,6 +9,8 @@ import LeagueCard from "../ui/LeagueCard";
 import SectionHeader from "../ui/SectionHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
+import DataFreshness from "@/components/ui/DataFreshness";
+import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 import LiveTicker from "@/components/live/LiveTicker";
 import Link from "next/link";
 
@@ -18,7 +19,7 @@ export default function VelorShell() {
     <IntroClient>
       <div className="min-h-screen flex flex-col bg-background">
         <LiveTickerWrapper />
-        <main className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden">
           <Suspense
             fallback={
               <div className="flex items-center min-h-[calc(100vh-8rem)]">
@@ -32,7 +33,7 @@ export default function VelorShell() {
           >
             <HeroContent />
           </Suspense>
-        </main>
+        </div>
         <Suspense
           fallback={
             <div className="px-4 sm:px-6 lg:px-10 py-6 space-y-8">
@@ -56,20 +57,11 @@ export default function VelorShell() {
 }
 
 async function LiveTickerWrapper() {
-  const matches: Match[] = [];
+  let matches: Match[] = [];
 
   try {
-    const registry = createRegistry();
-    const sports = getEnabledSports();
-    const results = await Promise.allSettled(
-      sports.map((sport) => registry.getProvider(sport.id).getLiveMatches())
-    );
-
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        matches.push(...result.value);
-      }
-    }
+    const snapshot = await getSportsSnapshot();
+    matches = snapshot.liveMatches;
   } catch {
     // Silently fail - ticker just won't show
   }
@@ -78,98 +70,51 @@ async function LiveTickerWrapper() {
 }
 
 async function HeroContent() {
-  const liveMatches: Match[] = [];
-  const allMatches: Match[] = [];
-  const leagues: League[] = [];
-  const teams: Team[] = [];
-
+  let snapshot;
   try {
-    const registry = createRegistry();
-    const sports = getEnabledSports();
-    const results = await Promise.allSettled(
-      sports.map(async (sport) => {
-        const provider = registry.getProvider(sport.id);
-        const [liveResult, allMatchesResult, leaguesResult, teamsResult] = await Promise.all([
-          provider.getLiveMatches(),
-          provider.getMatches(),
-          provider.getLeagues(),
-          provider.getTeams(),
-        ]);
-        return { live: liveResult, matches: allMatchesResult, leagues: leaguesResult, teams: teamsResult };
-      })
-    );
-
-    for (const r of results) {
-      if (r.status === "fulfilled") {
-        liveMatches.push(...r.value.live);
-        allMatches.push(...r.value.matches);
-        leagues.push(...r.value.leagues);
-        teams.push(...r.value.teams);
-      }
-    }
+    snapshot = await getSportsSnapshot();
   } catch {
-    // Hero can render with 0 defaults
+    snapshot = null;
   }
+
+  if (!snapshot) {
+    return (
+      <VelorHero
+        liveCount={0}
+        matchCount={0}
+        leagueCount={0}
+        teamCount={0}
+        syncedAt={new Date().toISOString()}
+        degraded
+      />
+    );
+  }
+
+  // Canonical homepage statistics — derived from the same normalized
+  // snapshot as /live and /matches. Never hardcoded, never independent.
+  const { stats } = snapshot;
 
   return (
     <VelorHero
-      liveCount={liveMatches.length}
-      matchCount={allMatches.length}
-      leagueCount={leagues.length}
-      teamCount={teams.length}
+      liveCount={stats.liveMatches}
+      matchCount={stats.matches}
+      leagueCount={stats.leagues}
+      teamCount={stats.teams}
+      syncedAt={snapshot.syncedAt}
+      degraded={snapshot.degraded}
     />
   );
 }
 
 async function HomeSections() {
-  const liveMatches: Match[] = [];
-  let upcomingMatches: Match[] = [];
-  const leagues: League[] = [];
-  const teams: Team[] = [];
-  let hasError = false;
-
+  let snapshot;
   try {
-    const registry = createRegistry();
-    const sports = getEnabledSports();
-    const results = await Promise.allSettled(
-      sports.map(async (sport) => {
-        const provider = registry.getProvider(sport.id);
-        const [liveResult, allMatches, leaguesResult, teamsResult] = await Promise.all([
-          provider.getLiveMatches(),
-          provider.getMatches(),
-          provider.getLeagues(),
-          provider.getTeams(),
-        ]);
-        return { live: liveResult, matches: allMatches, leagues: leaguesResult, teams: teamsResult };
-      })
-    );
-
-    let anySuccess = false;
-    const allMatchesList: Match[] = [];
-
-    for (const r of results) {
-      if (r.status === "fulfilled") {
-        anySuccess = true;
-        liveMatches.push(...r.value.live);
-        allMatchesList.push(...r.value.matches);
-        leagues.push(...r.value.leagues);
-        teams.push(...r.value.teams);
-      }
-    }
-
-    if (!anySuccess && sports.length > 0) {
-      hasError = true;
-    } else {
-      upcomingMatches = allMatchesList
-        .filter((m) => m.status === "scheduled")
-        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-        .slice(0, 6);
-    }
+    snapshot = await getSportsSnapshot();
   } catch {
-    hasError = true;
+    snapshot = null;
   }
 
-  if (hasError) {
+  if (!snapshot) {
     return (
       <div className="divide-y divide-border-subtle">
         <ErrorState title="DATA UNAVAILABLE" description="We couldn't load live match data. Please try again." />
@@ -177,19 +122,57 @@ async function HomeSections() {
     );
   }
 
+  if (snapshot.misconfigured) {
+    return (
+      <div className="divide-y divide-border-subtle">
+        <ErrorState
+          title="SPORTS DATA UNAVAILABLE"
+          description="Real API mode is requested but the API key is not configured on the server."
+          showRetry={false}
+        />
+      </div>
+    );
+  }
+
+  if (!snapshot.hasAnySuccess) {
+    return (
+      <div className="divide-y divide-border-subtle">
+        <ErrorState title="SPORTS DATA UNAVAILABLE" description="We couldn't load match data from any sport. Please try again." />
+      </div>
+    );
+  }
+
+  const { liveMatches, matches, leagues, teams } = snapshot;
+  const upcomingMatches = matches
+    .filter((m) => m.status === "scheduled")
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .slice(0, 6);
+
+  // "Featured" ranking: leagues/teams are ordered by live activity first,
+  // then total involvement — never a hardcoded "popular" list.
+  const featuredLeagues = rankFeaturedLeagues(leagues, matches, 6);
+  const featuredTeams = rankFeaturedTeams(teams, matches, 8);
+
   const hasAnyContent = liveMatches.length > 0 || upcomingMatches.length > 0 || leagues.length > 0 || teams.length > 0;
 
   return (
     <div className="divide-y divide-border-subtle">
+      {(snapshot.degraded || snapshot.unavailableSports.length > 0) && (
+        <div className="px-4 sm:px-6 lg:px-10 py-4 space-y-1 border-b border-border-subtle bg-surface-1/30">
+          <UnavailableSportsNote sports={snapshot.unavailableSports} />
+          <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} />
+        </div>
+      )}
+
       {liveMatches.length > 0 && (
-        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8" aria-label="Live matches">
           <SectionHeader
             title="LIVE NOW"
             subtitle={`${liveMatches.length} matches in progress`}
             href="/live"
             count={liveMatches.length}
           />
-          <div className="space-y-0">
+          <div className="space-y-0" role="list">
             {liveMatches.slice(0, 5).map((match) => (
               <MatchCard key={match.id} match={match} href={`/match/${match.id}`} />
             ))}
@@ -198,13 +181,13 @@ async function HomeSections() {
       )}
 
       {upcomingMatches.length > 0 && (
-        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 bg-surface-1/20">
+        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 bg-surface-1/20" aria-label="Upcoming matches">
           <SectionHeader
             title="UPCOMING"
             href="/matches"
             count={upcomingMatches.length}
           />
-          <div className="space-y-0">
+          <div className="space-y-0" role="list">
             {upcomingMatches.map((match) => (
               <MatchCard key={match.id} match={match} href={`/match/${match.id}`} />
             ))}
@@ -212,37 +195,39 @@ async function HomeSections() {
         </section>
       )}
 
-      {leagues.length > 0 && (
-        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+      {featuredLeagues.length > 0 && (
+        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8" aria-label="Featured leagues">
           <SectionHeader
-            title="POPULAR LEAGUES"
+            title="FEATURED LEAGUES"
+            subtitle="Ranked by live activity"
             href="/leagues"
             count={leagues.length}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {leagues.slice(0, 6).map((league) => (
+            {featuredLeagues.map((league) => (
               <LeagueCard key={league.id} league={league} href={`/league/${league.id}`} />
             ))}
           </div>
         </section>
       )}
 
-      {teams.length > 0 && (
-        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 bg-surface-1/20">
+      {featuredTeams.length > 0 && (
+        <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 bg-surface-1/20" aria-label="Featured teams">
           <SectionHeader
-            title="POPULAR TEAMS"
+            title="FEATURED TEAMS"
+            subtitle={snapshot.teamsDerivedFromMatches ? "Derived from today's fixtures" : "Ranked by live activity"}
             href="/teams"
             count={teams.length}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams.slice(0, 8).map((team) => (
+            {featuredTeams.map((team) => (
               <TeamCard key={team.id} team={team} href={`/team/${team.id}`} />
             ))}
           </div>
         </section>
       )}
 
-      <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+      <section className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8" aria-label="Browse by sport">
         <SectionHeader
           title="QUICK DISCOVERY"
           subtitle="Browse by sport"

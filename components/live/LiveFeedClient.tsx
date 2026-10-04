@@ -3,19 +3,32 @@
 import { useState, useEffect, useCallback, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Match } from "@/lib/types/sports";
+import { isLiveMatch } from "@/lib/api/snapshot-helpers";
 import LiveHeader from "@/components/live/LiveHeader";
 import LiveMatchList from "@/components/live/LiveMatchList";
+import DataFreshness from "@/components/ui/DataFreshness";
+import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 import ErrorState from "@/components/ui/ErrorState";
 
 const POLL_INTERVAL_MS = 30000;
 
 interface LiveFeedClientProps {
   initialMatches: Match[];
+  syncedAt: string;
+  degraded?: boolean;
+  unavailableSports?: { id: string; name: string; errorKind?: string }[];
 }
 
-export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) {
+export default function LiveFeedClient({
+  initialMatches,
+  syncedAt: initialSyncedAt,
+  degraded = false,
+  unavailableSports = [],
+}: LiveFeedClientProps) {
   const router = useRouter();
   const [matches, setMatches] = useState<Match[]>(initialMatches);
+  const [syncedAt, setSyncedAt] = useState(initialSyncedAt);
+  const [pollFailed, setPollFailed] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const [isRefreshing, startTransition] = useTransition();
 
@@ -24,15 +37,21 @@ export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) 
       const res = await fetch("/api/live-matches", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
-        next: { tags: ["live-matches"] },
       });
-      if (res.ok) {
-        const data = await res.json();
-        const newMatches: Match[] = data.matches ?? [];
-        setMatches(newMatches);
+      if (!res.ok) {
+        setPollFailed(true);
+        return;
       }
+      const data = await res.json();
+      const newMatches: Match[] = Array.isArray(data.matches) ? data.matches : [];
+      setMatches(newMatches);
+      if (typeof data.syncedAt === "string") {
+        setSyncedAt(data.syncedAt);
+      }
+      setPollFailed(false);
     } catch {
-      // Silently fail - keep existing matches
+      // Keep existing (stale) matches on network failure — never blank the screen.
+      setPollFailed(true);
     }
   }, []);
 
@@ -45,13 +64,11 @@ export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) 
   }, [fetchLiveMatches, router]);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-
     if (document.visibilityState === "hidden") {
       return;
     }
 
-    interval = setInterval(() => {
+    const interval = setInterval(() => {
       fetchLiveMatches();
       setCountdown(30);
     }, POLL_INTERVAL_MS);
@@ -78,15 +95,15 @@ export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) 
     };
   }, [fetchLiveMatches]);
 
+  // Canonical live derivation — identical to the homepage hero and /matches:
+  // live = matches.filter(isLiveMatch). Never a separate dataset.
   const liveMatches = matches.filter((m) => m.status === "live");
   const halftimeMatches = matches.filter((m) => m.status === "halftime");
-  const scheduledMatches = matches.filter((m) => m.status === "scheduled");
-  const finishedMatches = matches.filter((m) => m.status === "finished");
-  const postponedMatches = matches.filter((m) => m.status === "postponed" || m.status === "cancelled");
+  const activeMatches = matches.filter(isLiveMatch);
 
-  const totalMatches = matches.length;
+  const totalMatches = activeMatches.length;
   const leagueGroups = new Map<string, { league: Match["league"]; matches: Match[] }>();
-  for (const match of matches) {
+  for (const match of activeMatches) {
     const key = match.league.id;
     const existing = leagueGroups.get(key);
     if (existing) {
@@ -102,12 +119,12 @@ export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) 
 
       <div className="px-4 sm:px-6 lg:px-10 py-3 border-b border-border-subtle bg-surface-1/30">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <p className="text-xs text-text-secondary font-mono tracking-widest">
+          <p className="text-xs text-text-secondary font-mono tracking-widest" aria-live="polite">
             {totalMatches} MATCH{totalMatches !== 1 ? "ES" : ""} ACROSS {leagueGroups.size} LEAGUE{leagueGroups.size !== 1 ? "S" : ""}
           </p>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
-              <span className="relative flex h-1.5 w-1.5">
+              <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
                 <span className="absolute inline-flex h-full w-full rounded-full opacity-75 bg-live" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-live" />
               </span>
@@ -122,28 +139,41 @@ export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) 
               type="button"
               onClick={handleRefreshNow}
               disabled={isRefreshing}
-              className="px-3 py-1 border border-border-subtle text-[0.6rem] font-mono tracking-widest text-text-secondary hover:text-live hover:border-live transition-colors disabled:opacity-50"
+              className="px-3 py-1 border border-border-subtle text-[0.6rem] font-mono tracking-widest text-text-secondary hover:text-live hover:border-live transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-live"
             >
-              REFRESH NOW
+              {isRefreshing ? "REFRESHING…" : "REFRESH NOW"}
             </button>
           </div>
+        </div>
+        <div className="mt-2 flex flex-col gap-1">
+          <DataFreshness syncedAt={syncedAt} degraded={degraded || pollFailed} />
+          {unavailableSports.length > 0 && (
+            <UnavailableSportsNote sports={unavailableSports} />
+          )}
+          {pollFailed && (
+            <p role="alert" className="text-[0.65rem] text-gold font-mono tracking-widest uppercase">
+              Live update failed — showing last synced data. Data may be delayed.
+            </p>
+          )}
         </div>
       </div>
 
       {totalMatches === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center border-b border-border-subtle">
-          <p className="technical-label mb-2">NO LIVE MATCHES</p>
+          <p className="technical-label mb-2">NO LIVE MATCHES RIGHT NOW</p>
           <p className="text-sm text-text-secondary max-w-sm">
-            No live matches at the moment. Check back later.
+            {unavailableSports.length > 0
+              ? "No live matches from available sources. Some sports could not be reached — check back later."
+              : "No matches are currently in progress. Check upcoming fixtures or try refreshing."}
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-border-subtle">
+        <div className="divide-y divide-border-subtle" aria-live="polite" aria-label="Live score updates">
           {liveMatches.length > 0 && (
-            <section className="border-b border-border-subtle">
+            <section className="border-b border-border-subtle" aria-label="Live matches">
               <div className="px-4 sm:px-6 lg:px-10 py-2 bg-live/5">
                 <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
                     <span className="absolute inline-flex h-full w-full rounded-full opacity-75 bg-live" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-live" />
                   </span>
@@ -156,7 +186,7 @@ export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) 
           )}
 
           {halftimeMatches.length > 0 && (
-            <section className="border-b border-border-subtle">
+            <section className="border-b border-border-subtle" aria-label="Halftime matches">
               <div className="px-4 sm:px-6 lg:px-10 py-2 bg-gold/5">
                 <span className="technical-label text-gold">HALFTIME</span>
                 <span className="text-xs text-text-secondary font-mono ml-2">{halftimeMatches.length}</span>
@@ -164,38 +194,15 @@ export default function LiveFeedClient({ initialMatches }: LiveFeedClientProps) 
               <LiveMatchList matches={halftimeMatches} getHref={(m) => `/match/${m.id}`} />
             </section>
           )}
-
-          {scheduledMatches.length > 0 && (
-            <section className="border-b border-border-subtle">
-              <div className="px-4 sm:px-6 lg:px-10 py-2 bg-surface-1/40">
-                <span className="technical-label">UPCOMING</span>
-                <span className="text-xs text-text-secondary font-mono ml-2">{scheduledMatches.length}</span>
-              </div>
-              <LiveMatchList matches={scheduledMatches} getHref={(m) => `/match/${m.id}`} />
-            </section>
-          )}
-
-          {finishedMatches.length > 0 && (
-            <section className="border-b border-border-subtle">
-              <div className="px-4 sm:px-6 lg:px-10 py-2 bg-surface-1/40">
-                <span className="technical-label">FINISHED</span>
-                <span className="text-xs text-text-secondary font-mono ml-2">{finishedMatches.length}</span>
-              </div>
-              <LiveMatchList matches={finishedMatches} getHref={(m) => `/match/${m.id}`} />
-            </section>
-          )}
-
-          {postponedMatches.length > 0 && (
-            <section className="border-b border-border-subtle">
-              <div className="px-4 sm:px-6 lg:px-10 py-2 bg-danger/5">
-                <span className="technical-label text-danger">POSTPONED / CANCELLED</span>
-                <span className="text-xs text-text-secondary font-mono ml-2">{postponedMatches.length}</span>
-              </div>
-              <LiveMatchList matches={postponedMatches} getHref={(m) => `/match/${m.id}`} />
-            </section>
-          )}
         </div>
       )}
     </>
+  );
+}
+
+// Keep the error export used by future error boundaries.
+export function LiveFeedError() {
+  return (
+    <ErrorState title="SPORTS DATA UNAVAILABLE" description="We couldn't load live match data. Please try again." />
   );
 }

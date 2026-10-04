@@ -1,7 +1,5 @@
 import { Suspense } from "react";
-import { createRegistry } from "@/lib/api";
-import { getEnabledSports } from "@/lib/api/sports";
-import type { Team } from "@/lib/types/sports";
+import { getSportsSnapshot } from "@/lib/api/snapshot";
 import TeamsClient from "./TeamsClient";
 import LiveHeader from "@/components/live/LiveHeader";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
@@ -52,41 +50,34 @@ export default async function TeamsPage() {
 }
 
 async function TeamsContent() {
-  const teams: Team[] = [];
-  let hasError = false;
-  let misconfigured = false;
-
+  let snapshot;
   try {
-    const registry = createRegistry();
-    const sports = getEnabledSports();
-    const results = await Promise.allSettled(
-      sports.map((sport) => registry.getProvider(sport.id).getTeams())
-    );
-    let atLeastOneSuccess = false;
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        atLeastOneSuccess = true;
-        teams.push(...result.value);
-      }
-    }
-    if (!atLeastOneSuccess && sports.length > 0) {
-      const firstReject = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-      throw firstReject?.reason ?? new Error("SPORTS_DATA_UNAVAILABLE");
-    }
+    // Canonical dataset: teams come from the shared snapshot, which falls
+    // back to match participants when a provider exposes no team endpoint
+    // (cricket/tennis return [] for getTeams without a search query).
+    snapshot = await getSportsSnapshot();
   } catch (error) {
-    hasError = true;
     if (error instanceof Error && error.message.includes("VELOR_API_SPORTS_KEY")) {
-      misconfigured = true;
+      return <ProviderMisconfigured />;
     }
-  }
-
-  if (misconfigured) {
-    return <ProviderMisconfigured />;
-  }
-
-  if (hasError) {
     return <ProviderUnavailable />;
   }
 
-  return <TeamsClient initialTeams={teams} />;
+  if (snapshot.misconfigured && !snapshot.hasAnySuccess) {
+    return <ProviderMisconfigured />;
+  }
+
+  if (!snapshot.hasAnySuccess) {
+    return <ProviderUnavailable />;
+  }
+
+  return (
+    <TeamsClient
+      initialTeams={snapshot.teams}
+      syncedAt={snapshot.syncedAt}
+      degraded={snapshot.degraded}
+      unavailableSports={snapshot.unavailableSports}
+      teamsDerivedFromMatches={snapshot.teamsDerivedFromMatches}
+    />
+  );
 }

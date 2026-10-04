@@ -7,6 +7,8 @@ interface VelorHeroProps {
   matchCount?: number;
   leagueCount?: number;
   teamCount?: number;
+  syncedAt: string;
+  degraded?: boolean;
 }
 
 const ENV_LABELS = [
@@ -16,7 +18,7 @@ const ENV_LABELS = [
   { text: "SYNC / ACTIVE", top: "3%", right: undefined, bottom: undefined, left: "3%" },
 ];
 
-export default function VelorHero({ liveCount = 0, matchCount = 0, leagueCount = 0, teamCount = 0 }: VelorHeroProps) {
+export default function VelorHero({ liveCount = 0, matchCount = 0, leagueCount = 0, teamCount = 0, syncedAt, degraded = false }: VelorHeroProps) {
   return (
     <section className="relative flex-1 flex items-center min-h-[calc(100vh-8rem)]">
       <div className="absolute inset-0 bg-background" />
@@ -141,6 +143,8 @@ export default function VelorHero({ liveCount = 0, matchCount = 0, leagueCount =
           matchCount={matchCount}
           leagueCount={leagueCount}
           teamCount={teamCount}
+          syncedAt={syncedAt}
+          degraded={degraded}
         />
       </div>
 

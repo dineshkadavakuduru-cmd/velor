@@ -1,13 +1,14 @@
 import { Suspense } from "react";
-import { createRegistry } from "@/lib/api";
-import { getEnabledSports } from "@/lib/api/sports";
-import type { Match, League } from "@/lib/types/sports";
+import { getSportsSnapshot, isLiveMatch } from "@/lib/api/snapshot";
+import type { Match } from "@/lib/types/sports";
 import { validateMatchFilters } from "@/lib/api/validate";
 import LiveHeader from "@/components/live/LiveHeader";
 import MatchCard from "@/components/ui/MatchCard";
 import SectionHeader from "@/components/ui/SectionHeader";
 import ErrorState from "@/components/ui/ErrorState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import DataFreshness from "@/components/ui/DataFreshness";
+import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 import MatchesFilters from "./MatchesFilters";
 import EmptyState from "@/components/ui/EmptyState";
 
@@ -18,53 +19,6 @@ export const metadata = {
 
 interface MatchesPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}
-
-async function getFilteredMatches(
-  searchParams?: Record<string, string | string[] | undefined>
-): Promise<{ matches: Match[]; leagues: League[] }> {
-  const filters = validateMatchFilters(searchParams ?? {});
-  const registry = createRegistry();
-
-  if (filters.sport) {
-    const provider = registry.getProvider(filters.sport);
-    const [matches, leagues] = await Promise.all([
-      provider.getMatches(filters),
-      provider.getLeagues(),
-    ]);
-    return { matches, leagues };
-  }
-
-  const sports = getEnabledSports();
-  const results = await Promise.allSettled(
-    sports.map(async (sport) => {
-      const provider = registry.getProvider(sport.id);
-      const [matches, leagues] = await Promise.all([
-        provider.getMatches(filters),
-        provider.getLeagues(),
-      ]);
-      return { matches, leagues };
-    })
-  );
-
-  const allMatches: Match[] = [];
-  const allLeagues: League[] = [];
-  let anySuccess = false;
-
-  for (const r of results) {
-    if (r.status === "fulfilled") {
-      anySuccess = true;
-      allMatches.push(...r.value.matches);
-      allLeagues.push(...r.value.leagues);
-    }
-  }
-
-  if (!anySuccess && sports.length > 0) {
-    const firstReject = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-    throw firstReject?.reason ?? new Error("SPORTS_DATA_UNAVAILABLE");
-  }
-
-  return { matches: allMatches, leagues: allLeagues };
 }
 
 function ProviderUnavailable() {
@@ -108,28 +62,29 @@ export default function MatchesPage({ searchParams }: MatchesPageProps) {
 
 async function MatchesContent({ searchParams }: MatchesPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  let result: { matches: Match[]; leagues: League[] } = { matches: [], leagues: [] };
-  let hasError = false;
-  let misconfigured = false;
+  const filters = validateMatchFilters(resolvedSearchParams);
 
+  let snapshot;
   try {
-    result = await getFilteredMatches(resolvedSearchParams);
+    // Canonical dataset with the active filters applied at the provider —
+    // live counts here always agree with /live and the homepage hero.
+    snapshot = await getSportsSnapshot(filters);
   } catch (error) {
-    hasError = true;
     if (error instanceof Error && error.message.includes("VELOR_API_SPORTS_KEY")) {
-      misconfigured = true;
+      return <ProviderMisconfigured />;
     }
-  }
-
-  if (misconfigured) {
-    return <ProviderMisconfigured />;
-  }
-
-  if (hasError) {
     return <ProviderUnavailable />;
   }
 
-  const { matches, leagues } = result;
+  if (snapshot.misconfigured && !snapshot.hasAnySuccess) {
+    return <ProviderMisconfigured />;
+  }
+
+  if (!snapshot.hasAnySuccess) {
+    return <ProviderUnavailable />;
+  }
+
+  const { matches, leagues } = snapshot;
   const currentFilters = resolvedSearchParams;
 
   const grouped = groupMatches(matches, currentFilters);
@@ -139,7 +94,7 @@ async function MatchesContent({ searchParams }: MatchesPageProps) {
   ).length;
 
   const totalMatches = matches.length;
-  const liveCount = matches.filter((m) => m.status === "live" || m.status === "halftime").length;
+  const liveCount = matches.filter(isLiveMatch).length;
   const scheduledCount = matches.filter((m) => m.status === "scheduled").length;
   const finishedCount = matches.filter((m) => m.status === "finished").length;
   const postponedCount = matches.filter((m) => m.status === "postponed" || m.status === "cancelled").length;
@@ -153,10 +108,16 @@ async function MatchesContent({ searchParams }: MatchesPageProps) {
         countLabel="MATCHES"
         showLiveIndicator={false}
       />
+      <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30 flex flex-col gap-1">
+        <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} />
+        {snapshot.unavailableSports.length > 0 && (
+          <UnavailableSportsNote sports={snapshot.unavailableSports} />
+        )}
+      </div>
       <MatchesFilters leagues={leagues} currentFilters={currentFilters} />
       <div>
         {filterCount > 0 && (
-          <div className="flex items-center gap-4 py-3 border-b border-border-subtle text-xs text-text-secondary font-mono">
+          <div className="flex items-center gap-4 py-3 border-b border-border-subtle text-xs text-text-secondary font-mono" role="status">
             <span>{totalMatches} RESULT{totalMatches !== 1 ? "S" : ""}</span>
             {liveCount > 0 && <span className="text-live">{liveCount} LIVE</span>}
             {scheduledCount > 0 && <span>{scheduledCount} UPCOMING</span>}
@@ -170,12 +131,14 @@ async function MatchesContent({ searchParams }: MatchesPageProps) {
             description={
               filterCount > 0
                 ? "No matches match the selected filters. Try adjusting your criteria."
-                : "No matches available at the moment."
+                : snapshot.degraded
+                  ? "No matches from available sources right now. Some sports could not be reached."
+                  : "No matches available at the moment."
             }
           />
         )}
         {grouped.map((group) => (
-          <section key={group.label} className="border-b border-border-subtle">
+          <section key={group.label} className="border-b border-border-subtle" aria-label={`${group.label} matches`}>
             <div className="px-4 sm:px-6 lg:px-10 py-3">
               <div className="flex items-center justify-between">
                 <SectionHeader
@@ -185,7 +148,7 @@ async function MatchesContent({ searchParams }: MatchesPageProps) {
                 />
               </div>
             </div>
-            <div>
+            <div role="list">
               {group.matches.map((match) => (
                 <MatchCard key={match.id} match={match} href={`/match/${match.id}`} />
               ))}
@@ -206,7 +169,7 @@ function groupMatches(matches: Match[], filters: Record<string, string | string[
   const hasStatusFilter = !!(filters.status && typeof filters.status === "string" && filters.status.length > 0);
   const status = hasStatusFilter ? (filters.status as string) : "";
 
-  const live = matches.filter((m) => m.status === "live" || m.status === "halftime");
+  const live = matches.filter(isLiveMatch);
   const scheduled = matches.filter((m) => m.status === "scheduled");
   const finished = matches.filter((m) => m.status === "finished");
   const postponed = matches.filter((m) => m.status === "postponed" || m.status === "cancelled");

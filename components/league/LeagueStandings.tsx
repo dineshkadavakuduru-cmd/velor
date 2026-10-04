@@ -40,22 +40,22 @@ export default function LeagueStandings({ standings, teamNames, getTeamHref, sho
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-border-subtle">
-                  <th className="py-2 pr-4 technical-label w-12">POS</th>
-                  <th className="py-2 pr-4 technical-label">TEAM</th>
+                  <th scope="col" className="py-2 pr-4 technical-label w-12">POS</th>
+                  <th scope="col" className="py-2 pr-4 technical-label">TEAM</th>
                   {isFootball && (
                     <>
-                      <th className="py-2 pr-4 technical-label text-center hidden sm:table-cell">P</th>
-                      <th className="py-2 pr-4 technical-label text-center hidden sm:table-cell">W</th>
-                      <th className="py-2 pr-4 technical-label text-center hidden sm:table-cell">D</th>
-                      <th className="py-2 pr-4 technical-label text-center hidden sm:table-cell">L</th>
-                      <th className="py-2 pr-4 technical-label text-center hidden sm:table-cell">GF</th>
-                      <th className="py-2 pr-4 technical-label text-center hidden sm:table-cell">GA</th>
+                      <th scope="col" className="py-2 pr-4 technical-label text-center hidden sm:table-cell">P</th>
+                      <th scope="col" className="py-2 pr-4 technical-label text-center hidden sm:table-cell">W</th>
+                      <th scope="col" className="py-2 pr-4 technical-label text-center hidden sm:table-cell">D</th>
+                      <th scope="col" className="py-2 pr-4 technical-label text-center hidden sm:table-cell">L</th>
+                      <th scope="col" className="py-2 pr-4 technical-label text-center hidden sm:table-cell">GF</th>
+                      <th scope="col" className="py-2 pr-4 technical-label text-center hidden sm:table-cell">GA</th>
                     </>
                   )}
                   {hasGD && isFootball && (
-                    <th className="py-2 pr-4 technical-label text-center hidden md:table-cell">GD</th>
+                    <th scope="col" className="py-2 pr-4 technical-label text-center hidden md:table-cell">GD</th>
                   )}
-                  <th className="py-2 pr-4 technical-label text-center">PTS</th>
+                  <th scope="col" className="py-2 pr-4 technical-label text-center">PTS</th>
                 </tr>
               </thead>
               <tbody>

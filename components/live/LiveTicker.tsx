@@ -17,6 +17,7 @@ export default function LiveTicker({ matches }: LiveTickerProps) {
   return (
     <div
       className="border-b border-border-subtle bg-surface-1/60 overflow-x-auto"
+      role="status"
       aria-label="Live matches ticker"
       data-shell-ticker
     >

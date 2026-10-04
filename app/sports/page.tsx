@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { createRegistry } from "@/lib/api";
+import { getSportsSnapshot } from "@/lib/api/snapshot";
 import { SPORTS } from "@/lib/api/sports";
-import type { League, Match } from "@/lib/types/sports";
+import type { League } from "@/lib/types/sports";
 import LiveHeader from "@/components/live/LiveHeader";
 import ErrorState from "@/components/ui/ErrorState";
 import LeagueCard from "@/components/ui/LeagueCard";
+import DataFreshness from "@/components/ui/DataFreshness";
 
 export const metadata = {
   title: "Sports — VELOR",
@@ -19,6 +20,8 @@ type SportSummary = {
   liveCount: number;
   leagues: League[];
   enabled: boolean;
+  available: boolean;
+  errorKind?: string;
 };
 
 function ProviderUnavailable() {
@@ -44,50 +47,27 @@ function ProviderMisconfigured() {
 }
 
 export default async function SportsPage() {
-  const leagues: League[] = [];
-  const matches: Match[] = [];
-  let hasError = false;
-  let misconfigured = false;
-
+  let snapshot;
   try {
-    const registry = createRegistry();
-    const enabledSports = Object.values(SPORTS).filter((s) => s.enabled);
-    const sportResults = await Promise.allSettled(
-      enabledSports.map(async (sport) => {
-        const provider = registry.getProvider(sport.id);
-        const [sportLeagues, sportMatches] = await Promise.all([
-          provider.getLeagues(),
-          provider.getMatches(),
-        ]);
-        return { sportId: sport.id, leagues: sportLeagues, matches: sportMatches };
-      })
-    );
-    let atLeastOneSuccess = false;
-    for (const result of sportResults) {
-      if (result.status === "fulfilled") {
-        atLeastOneSuccess = true;
-        leagues.push(...result.value.leagues);
-        matches.push(...result.value.matches);
-      }
-    }
-    if (!atLeastOneSuccess && enabledSports.length > 0) {
-      const firstReject = sportResults.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-      throw firstReject?.reason ?? new Error("SPORTS_DATA_UNAVAILABLE");
-    }
+    // Canonical dataset — per-sport availability comes from the same snapshot
+    // every other page uses, so coverage claims here can't disagree with /matches.
+    snapshot = await getSportsSnapshot();
   } catch (error) {
-    hasError = true;
     if (error instanceof Error && error.message.includes("VELOR_API_SPORTS_KEY")) {
-      misconfigured = true;
+      return <ProviderMisconfigured />;
     }
+    return <ProviderUnavailable />;
   }
 
-  if (misconfigured) {
+  if (snapshot.misconfigured && !snapshot.hasAnySuccess) {
     return <ProviderMisconfigured />;
   }
 
-  if (hasError) {
+  if (!snapshot.hasAnySuccess) {
     return <ProviderUnavailable />;
   }
+
+  const { matches, leagues } = snapshot;
 
   const sportsMap = new Map<string, SportSummary>();
   for (const sport of Object.values(SPORTS)) {
@@ -99,7 +79,18 @@ export default async function SportsPage() {
       liveCount: 0,
       leagues: [],
       enabled: sport.enabled,
+      available: true,
     });
+  }
+
+  // Mark sports whose provider failed — shown honestly as unavailable,
+  // never as "0 leagues, 0 matches" as if the world were empty.
+  for (const sync of snapshot.perSport) {
+    const summary = sportsMap.get(sync.sportId);
+    if (summary && sync.state !== "ok") {
+      summary.available = false;
+      summary.errorKind = sync.errorKind;
+    }
   }
 
   for (const league of leagues) {
@@ -134,6 +125,9 @@ export default async function SportsPage() {
         countLabel="SPORTS"
         showLiveIndicator={false}
       />
+      <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30">
+        <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} />
+      </div>
       <div className="py-6 sm:py-8">
         {sports.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center border-b border-border-subtle">
@@ -145,7 +139,7 @@ export default async function SportsPage() {
         ) : (
           <div className="space-y-8">
             {sports.map((sport) => (
-              <section key={sport.id} className="border-b border-border-subtle last:border-b-0">
+              <section key={sport.id} className="border-b border-border-subtle last:border-b-0" aria-label={`${sport.name} coverage`}>
                 <div className="px-4 sm:px-6 lg:px-10 py-4">
                   <div className="flex items-center justify-between gap-4 mb-4">
                     <div>
@@ -158,22 +152,35 @@ export default async function SportsPage() {
                             COMING SOON
                           </span>
                         )}
-                      </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="font-mono text-[0.65rem] text-text-secondary tracking-widest uppercase">
-                          {sport.leagueCount} {sport.leagueCount === 1 ? "LEAGUE" : "LEAGUES"}
-                        </span>
-                        <span className="font-mono text-[0.65rem] text-text-secondary tracking-widest uppercase">
-                          {sport.matchCount} {sport.matchCount === 1 ? "MATCH" : "MATCHES"}
-                        </span>
-                        {sport.liveCount > 0 && (
-                          <span className="font-mono text-[0.65rem] text-live tracking-widest uppercase">
-                            {sport.liveCount} LIVE
+                        {sport.enabled && !sport.available && (
+                          <span className="font-mono text-[0.6rem] text-gold tracking-widest uppercase border border-gold/30 px-2 py-0.5" role="status">
+                            LIVE DATA UNAVAILABLE
                           </span>
                         )}
                       </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        {sport.enabled && sport.available ? (
+                          <>
+                            <span className="font-mono text-[0.65rem] text-text-secondary tracking-widest uppercase">
+                              {sport.leagueCount} {sport.leagueCount === 1 ? "LEAGUE" : "LEAGUES"}
+                            </span>
+                            <span className="font-mono text-[0.65rem] text-text-secondary tracking-widest uppercase">
+                              {sport.matchCount} {sport.matchCount === 1 ? "MATCH" : "MATCHES"}
+                            </span>
+                            {sport.liveCount > 0 && (
+                              <span className="font-mono text-[0.65rem] text-live tracking-widest uppercase">
+                                {sport.liveCount} LIVE
+                              </span>
+                            )}
+                          </>
+                        ) : sport.enabled ? (
+                          <span className="font-mono text-[0.65rem] text-text-secondary tracking-widest uppercase">
+                            Could not reach this sport&apos;s data provider — not zero matches worldwide.
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    {sport.enabled && (
+                    {sport.enabled && sport.available && (
                       <Link
                         href={`/matches?sport=${encodeURIComponent(sport.id)}`}
                         className="font-mono text-xs tracking-widest text-text-secondary hover:text-live transition-colors shrink-0"
@@ -188,10 +195,16 @@ export default async function SportsPage() {
                         <LeagueCard key={league.id} league={league} href={`/league/${league.id}`} />
                       ))}
                     </div>
-                  ) : sport.enabled ? (
+                  ) : sport.enabled && sport.available ? (
                     <div className="py-8 text-center border border-border-subtle border-dashed">
                       <p className="text-sm text-text-secondary">
-                        No leagues or matches available for this sport yet.
+                        No leagues or matches available for this sport right now.
+                      </p>
+                    </div>
+                  ) : sport.enabled ? (
+                    <div className="py-8 text-center border border-border-subtle border-dashed">
+                      <p className="text-sm text-text-secondary" role="status">
+                        Live data unavailable for {sport.name}. Data may be delayed — please check back later.
                       </p>
                     </div>
                   ) : (
