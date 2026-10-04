@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { MatchEvent } from "@/lib/types/sports";
 
 interface MatchEventsPanelProps {
@@ -75,11 +76,30 @@ export default function MatchEventsPanel({ events, homeTeamId, awayTeamId }: Mat
                   )}
                 </div>
                 <p className="text-sm text-text-primary truncate">
-                  {event.playerName}
+                  {event.playerId ? (
+                    <Link
+                      href={`/player/${event.playerId}`}
+                      className="hover:text-live transition-colors"
+                    >
+                      {event.playerName}
+                    </Link>
+                  ) : (
+                    event.playerName
+                  )}
                 </p>
                 {event.assistPlayerName && (
                   <p className="text-xs text-text-secondary mt-0.5">
-                    Assist: {event.assistPlayerName}
+                    Assist:{" "}
+                    {event.assistPlayerId ? (
+                      <Link
+                        href={`/player/${event.assistPlayerId}`}
+                        className="hover:text-live transition-colors"
+                      >
+                        {event.assistPlayerName}
+                      </Link>
+                    ) : (
+                      event.assistPlayerName
+                    )}
                   </p>
                 )}
               </div>

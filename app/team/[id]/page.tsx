@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { createRegistry } from "@/lib/api";
 import { findTeam } from "@/lib/api/lookup";
-import type { Match, Team, Standing } from "@/lib/types/sports";
+import type { Match, Team, Standing, Player } from "@/lib/types/sports";
 import { validateTeamId } from "@/lib/api/validate";
 import TeamHeader from "@/components/team/TeamHeader";
 import TeamRecentMatches from "@/components/team/TeamRecentMatches";
 import TeamUpcomingMatches from "@/components/team/TeamUpcomingMatches";
 import TeamPerformanceSummary from "@/components/team/TeamPerformanceSummary";
+import PlayerStatCard from "@/components/player/PlayerStatCard";
 import LiveHeader from "@/components/live/LiveHeader";
 import ErrorState from "@/components/ui/ErrorState";
 
@@ -91,6 +92,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   let team: Team | null = null;
   let matches: Match[] = [];
   let standings: Standing[] = [];
+  let squad: Player[] = [];
   let leagueInfo: { id: string; name: string; country: string; sportId?: string } | null = null;
   let teamPosition: Standing | undefined;
   let providerResult: Awaited<ReturnType<typeof findTeam>> = null;
@@ -105,12 +107,14 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     providerResult = await findTeam(registry, validId, sportId);
     if (!providerResult) throw new Error("TEAM_NOT_FOUND");
     const provider = providerResult.provider;
-    const [teamResult, matchesResult] = await Promise.all([
+    const [teamResult, matchesResult, squadResult] = await Promise.all([
       provider.getTeam(validId),
       provider.getMatches({ teamId: validId }),
+      provider.getTeamSquad ? provider.getTeamSquad(validId) : Promise.resolve([]),
     ]);
     team = teamResult;
     matches = matchesResult;
+    squad = squadResult;
 
     if (matches.length > 0) {
       const currentLeague = matches.find((m) => m.status === "live" || m.status === "halftime" || m.status === "scheduled")?.league
@@ -152,12 +156,19 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <TeamPageContent team={team} matches={matches} leagueInfo={leagueInfo} teamPosition={teamPosition} standings={standings} />
+      <TeamPageContent
+        team={team}
+        matches={matches}
+        leagueInfo={leagueInfo}
+        teamPosition={teamPosition}
+        standings={standings}
+        squad={squad}
+      />
     </div>
   );
 }
 
-function TeamPageContent({ team, matches, leagueInfo, teamPosition, standings }: { team: Team; matches: Match[]; leagueInfo: { id: string; name: string; country: string; sportId?: string } | null; teamPosition?: Standing; standings: Standing[] }) {
+function TeamPageContent({ team, matches, leagueInfo, teamPosition, standings, squad }: { team: Team; matches: Match[]; leagueInfo: { id: string; name: string; country: string; sportId?: string } | null; teamPosition?: Standing; standings: Standing[]; squad: Player[] }) {
   const recentMatches = matches
     .filter((m) => m.status === "finished" || m.status === "live" || m.status === "halftime")
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
@@ -255,6 +266,22 @@ function TeamPageContent({ team, matches, leagueInfo, teamPosition, standings }:
 
       <TeamRecentMatches matches={recentMatches} />
       <TeamUpcomingMatches matches={upcomingMatches} />
+
+      {squad.length > 0 && (
+        <div className="px-4 sm:px-6 lg:px-10 py-8 border-t border-border-subtle">
+          <h2 className="technical-label mb-4">SQUAD</h2>
+          <div className="space-y-2">
+            {squad.map((player) => (
+              <PlayerStatCard
+                key={player.id}
+                player={player}
+                href={`/player/${player.id}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="px-4 sm:px-6 lg:px-10 py-4 border-t border-border-subtle">
         <Link
           href="/teams"

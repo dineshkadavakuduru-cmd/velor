@@ -1,6 +1,7 @@
 "use client";
 
-import type { MatchLineup } from "@/lib/types/sports";
+import Link from "next/link";
+import type { MatchLineup, LineupPlayer } from "@/lib/types/sports";
 
 interface MatchLineupsPanelProps {
   lineups: MatchLineup[];
@@ -62,14 +63,9 @@ export default function MatchLineupsPanel({ lineups }: MatchLineupsPanelProps) {
   );
 }
 
-function PlayerChip({ player, isSubstitute }: { player: { id: string; name: string; position: string; number?: number }; isSubstitute: boolean }) {
-  return (
-    <div
-      className={`
-        flex items-center gap-2 p-2 border border-border-subtle
-        ${isSubstitute ? "bg-surface-1/20" : "bg-surface-2/30"}
-      `}
-    >
+function PlayerChip({ player, isSubstitute }: { player: LineupPlayer; isSubstitute: boolean }) {
+  const playerNameContent = (
+    <>
       {player.number != null && (
         <span className="data-number text-xs text-text-secondary w-5 shrink-0 text-center">
           {player.number}
@@ -85,6 +81,28 @@ function PlayerChip({ player, isSubstitute }: { player: { id: string; name: stri
       </div>
       {player.position && player.position.toLowerCase().includes("captain") && (
         <span className="text-[0.55rem] font-mono text-gold tracking-widest shrink-0">C</span>
+      )}
+    </>
+  );
+
+  return (
+    <div
+      className={`
+        flex items-center gap-2 p-2 border border-border-subtle
+        ${isSubstitute ? "bg-surface-1/20" : "bg-surface-2/30"}
+      `}
+    >
+      {player.id ? (
+        <Link
+          href={`/player/${player.id}`}
+          className="flex items-center gap-2 hover:text-live transition-colors flex-1 min-w-0"
+        >
+          {playerNameContent}
+        </Link>
+      ) : (
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {playerNameContent}
+        </div>
       )}
     </div>
   );

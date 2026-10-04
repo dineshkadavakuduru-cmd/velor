@@ -14,6 +14,7 @@ export interface ProviderCapabilities {
   hasEvents: boolean;
   hasStatistics: boolean;
   hasLineups: boolean;
+  hasPlayerMatchStats: boolean;
 }
 
 export interface ProviderRegistry {
@@ -48,6 +49,7 @@ export function createProviderRegistry(
       hasEvents: true,
       hasStatistics: true,
       hasLineups: true,
+      hasPlayerMatchStats: true,
     };
 
     capabilitiesCache.set(sportId, caps);

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { Match, MatchEvent, MatchStatistics, MatchLineup } from "@/lib/types/sports";
-import { getMatchIntelligence, getScoreDifferenceLabel } from "@/lib/utils/derivedMetrics";
+import { getMatchIntelligence } from "@/lib/utils/derivedMetrics";
 import MatchStatisticsPanel from "./MatchStatistics";
 import MatchEventsPanel from "./MatchEvents";
 import MatchLineupsPanel from "./MatchLineups";
@@ -112,7 +112,7 @@ export default function MatchTabs({ match, stats, events, lineups }: MatchTabsPr
       </div>
 
       <TabPanel tabId="overview" active={activeTab}>
-        <OverviewTab match={match} />
+        <OverviewTab match={match} stats={stats} events={events} lineups={lineups} />
       </TabPanel>
 
       <TabPanel tabId="stats" active={activeTab} available={hasStats}>
@@ -163,92 +163,39 @@ function TabPanel({ tabId, active, available, children }: { tabId: TabId; active
   );
 }
 
-function OverviewTab({ match }: { match: Match }) {
+function OverviewTab({ match, stats, events, lineups }: { match: Match; stats: MatchStatistics[]; events: MatchEvent[]; lineups: MatchLineup[] }) {
   const intel = getMatchIntelligence(match);
-  const scoreDiffLabel = getScoreDifferenceLabel(match);
 
   return (
     <div className="space-y-6">
-      {intel.isFinished && intel.result && (
-        <div className="flex flex-wrap items-center gap-3">
-          <span className={`
-            px-3 py-1.5 border text-xs font-mono tracking-widest
-            ${intel.result === "home_win" ? "border-live text-live bg-live/5" : ""}
-            ${intel.result === "away_win" ? "border-gold text-gold bg-gold/5" : ""}
-            ${intel.result === "draw" ? "border-text-secondary text-text-secondary bg-surface-2" : ""}
-          `}>
-            {intel.resultLabel}
-          </span>
-          {scoreDiffLabel && (
-            <span className="text-xs text-text-secondary font-mono tracking-widest">
-              {scoreDiffLabel}
-            </span>
-          )}
-          {intel.hasHalftimeScore && intel.halftimeScore && (
-            <span className="text-xs text-text-secondary font-mono">
-              HALFTIME {intel.halftimeScore.home}-{intel.halftimeScore.away}
-            </span>
-          )}
-        </div>
-      )}
-
-      {match.score.periodScores && match.score.periodScores.length > 0 && (
-        <div className="pt-4 border-t border-border-subtle">
-          <span className="technical-label block mb-3">PERIOD SCORES</span>
-          <div className="flex flex-wrap gap-2">
-            {match.score.periodScores.map((ps) => (
-              <span
-                key={ps.period}
-                className="px-3 py-1.5 bg-surface-2 border border-border-subtle text-sm font-mono tracking-widest text-text-primary"
-              >
-                {ps.period} {ps.home}-{ps.away}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="flex flex-col gap-1">
           <span className="technical-label">MATCH STATE</span>
           <span className="text-sm text-text-primary capitalize">{intel.stateSummary}</span>
         </div>
         <div className="flex flex-col gap-1">
-          <span className="technical-label">START TIME</span>
-          <span className="text-sm text-text-primary">
-            {new Date(match.startTime).toLocaleString("en-US", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
+          <span className="technical-label">SPORT</span>
+          <span className="text-sm text-text-primary">{match.sport.name}</span>
         </div>
         <div className="flex flex-col gap-1">
           <span className="technical-label">COMPETITION</span>
           <span className="text-sm text-text-primary">{match.league.name}</span>
         </div>
-        {match.venue && (
-          <div className="flex flex-col gap-1">
-            <span className="technical-label">VENUE</span>
-            <span className="text-sm text-text-primary">{match.venue}</span>
-          </div>
-        )}
-        {match.league.country && (
-          <div className="flex flex-col gap-1">
-            <span className="technical-label">COUNTRY</span>
-            <span className="text-sm text-text-primary">{match.league.country}</span>
-          </div>
-        )}
-        {match.period && (
-          <div className="flex flex-col gap-1">
-            <span className="technical-label">PERIOD</span>
-            <span className="text-sm text-text-primary">{match.period}</span>
-          </div>
-        )}
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-border-subtle">
+        <KeyMetric label="TOTAL EVENTS" value={events.length.toString()} />
+        <KeyMetric label="PERIOD SCORES" value={match.score.periodScores?.length ? match.score.periodScores.map((ps) => `${ps.period} ${ps.home}-${ps.away}`).join(", ") : "N/A"} />
+      </div>
+    </div>
+  );
+}
+
+function KeyMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="technical-label">{label}</span>
+      <span className="data-number text-sm text-text-primary">{value}</span>
     </div>
   );
 }

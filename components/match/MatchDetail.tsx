@@ -6,7 +6,7 @@ import { getMatchIntelligence, getScoreDifferenceLabel } from "@/lib/utils/deriv
 import LeagueBadge from "@/components/live/LeagueBadge";
 import TeamDisplay from "@/components/live/TeamDisplay";
 import ScoreDisplay from "@/components/live/ScoreDisplay";
-import LiveStatus from "@/components/live/LiveStatus";
+import StatusBadge from "@/components/ui/StatusBadge";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 import MatchTabs from "./MatchTabs";
 import Link from "next/link";
@@ -37,35 +37,37 @@ export default function MatchDetail({ match, stats, events, lineups }: MatchDeta
           <LeagueBadge league={match.league} href={`/league/${match.league.id}`} />
           <div className="flex items-center gap-3">
             <span className="technical-label">{intel.stateSummary}</span>
-            <LiveStatus status={match.status} period={match.period} />
+            <StatusBadge status={match.status} period={match.period} />
           </div>
         </div>
 
         <div className="p-4 sm:p-6 bg-surface-1/40 border border-border-subtle mb-6">
-          <div className="flex flex-col gap-4 sm:gap-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <TeamDisplay
-                  team={match.homeTeam}
-                  showLogo={!!match.homeTeam.logo}
-                  showShortName={true}
-                  href={`/team/${match.homeTeam.id}`}
-                />
-              </div>
-              <ScoreDisplay score={match.score} size="lg" />
+          <div className="grid grid-cols-3 items-center gap-4 sm:gap-6">
+            <div className="flex justify-end">
+              <TeamDisplay
+                team={match.homeTeam}
+                align="right"
+                showLogo={!!match.homeTeam.logo}
+                showShortName={true}
+                href={`/team/${match.homeTeam.id}`}
+              />
             </div>
 
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <TeamDisplay
-                  team={match.awayTeam}
-                  align="right"
-                  showLogo={!!match.awayTeam.logo}
-                  showShortName={true}
-                  href={`/team/${match.awayTeam.id}`}
-                />
-              </div>
-              <div className="w-16" />
+            <div className="flex flex-col items-center gap-2">
+              <ScoreDisplay score={match.score} size="lg" />
+              {match.period && (
+                <StatusBadge status={match.status} period={match.period} />
+              )}
+            </div>
+
+            <div className="flex justify-start">
+              <TeamDisplay
+                team={match.awayTeam}
+                align="left"
+                showLogo={!!match.awayTeam.logo}
+                showShortName={true}
+                href={`/team/${match.awayTeam.id}`}
+              />
             </div>
           </div>
         </div>

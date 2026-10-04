@@ -1,5 +1,5 @@
 import type { Match } from "@/lib/types/sports";
-import LiveMatchCard from "./LiveMatchCard";
+import MatchCard from "@/components/ui/MatchCard";
 
 interface LiveMatchListProps {
   matches: Match[];
@@ -50,7 +50,7 @@ export default function LiveMatchList({
   return (
     <div>
       {matches.map((match) => (
-        <LiveMatchCard
+        <MatchCard
           key={match.id}
           match={match}
           href={getHref?.(match)}

@@ -1,88 +1,45 @@
-const MATCHES = [
-  {
-    competition: "Premier League",
-    home: "Arsenal",
-    away: "Chelsea",
-    homeScore: 2,
-    awayScore: 1,
-    time: "72'",
-  },
-  {
-    competition: "La Liga",
-    home: "Real Madrid",
-    away: "Barcelona",
-    homeScore: 1,
-    awayScore: 0,
-    time: "64'",
-  },
-  {
-    competition: "Serie A",
-    home: "Inter",
-    away: "Milan",
-    homeScore: 0,
-    awayScore: 0,
-    time: "31'",
-  },
-  {
-    competition: "NBA",
-    home: "Boston",
-    away: "Los Angeles",
-    homeScore: 108,
-    awayScore: 104,
-    time: "Q4",
-  },
-  {
-    competition: "NFL",
-    home: "Kansas City",
-    away: "Buffalo",
-    homeScore: 21,
-    awayScore: 17,
-    time: "Q3",
-  },
-  {
-    competition: "Ligue 1",
-    home: "PSG",
-    away: "Lyon",
-    homeScore: 3,
-    awayScore: 1,
-    time: "85'",
-  },
-  {
-    competition: "ATP Tour",
-    home: "Alcaraz",
-    away: "Sinner",
-    homeScore: 1,
-    awayScore: 2,
-    time: "Set 3",
-  },
-];
+"use client";
 
-export default function LiveTicker() {
+import Link from "next/link";
+import type { Match } from "@/lib/types/sports";
+
+interface LiveTickerProps {
+  matches: Match[];
+}
+
+export default function LiveTicker({ matches }: LiveTickerProps) {
+  const liveMatches = matches.filter((m) => m.status === "live" || m.status === "halftime");
+
+  if (liveMatches.length === 0) {
+    return null;
+  }
+
   return (
     <div
-      className="border-b border-border-subtle bg-surface-1/60"
+      className="border-b border-border-subtle bg-surface-1/60 overflow-x-auto"
       aria-label="Live matches ticker"
       data-shell-ticker
     >
-      <div className="flex items-stretch overflow-x-auto">
-        {MATCHES.map((match, idx) => (
-          <div
-            key={idx}
-            className="flex-shrink-0 flex items-center gap-4 px-5 py-3 border-r border-border-subtle last:border-r-0 hover:bg-surface-2/50 transition-colors cursor-default"
+      <div className="flex items-stretch">
+        {liveMatches.map((match) => (
+          <Link
+            key={match.id}
+            href={`/match/${match.id}`}
+            className="flex-shrink-0 flex items-center gap-4 px-5 py-3 border-r border-border-subtle last:border-r-0 hover:bg-surface-2/50 transition-colors"
           >
             <span className="technical-label w-24 truncate">
-              {match.competition}
+              {match.league.name}
             </span>
             <span className="font-body text-sm text-text-secondary w-28 truncate">
-              {match.home} — {match.away}
+              {match.homeTeam.shortName} — {match.awayTeam.shortName}
             </span>
             <span className="data-number text-sm font-medium text-text-primary w-16 text-right">
-              {match.homeScore} — {match.awayScore}
+              {match.score.home ?? 0} — {match.score.away ?? 0}
             </span>
             <span className="data-number text-xs text-text-secondary w-12 text-right">
-              {match.time}
+              {match.period ?? ""}
             </span>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

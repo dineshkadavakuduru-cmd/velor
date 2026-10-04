@@ -5,12 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Search } from "lucide-react";
 import { motion, type Variants, AnimatePresence } from "motion/react";
+import CommandPalette from "@/components/ui/CommandPalette";
 
 const NAV_LINKS = [
   { label: "LIVE", href: "/live" },
   { label: "MATCHES", href: "/matches" },
   { label: "TEAMS", href: "/teams" },
   { label: "LEAGUES", href: "/leagues" },
+  { label: "SPORTS", href: "/sports" },
   { label: "FAVORITES", href: "/favorites" },
   { label: "SEARCH", href: "/search" },
 ];
@@ -33,7 +35,8 @@ function isActiveRoute(pathname: string, href: string): boolean {
   if (href === "/matches") return pathname === "/matches";
   if (href === "/teams") return pathname === "/teams";
   if (href === "/leagues") return pathname === "/leagues";
-  if (href === "/favorites") return pathname === "/favorites";
+  if (href === "/sports") return pathname === "/sports";
+  if (href === "/favorites") return pathname === "/favorites" || pathname.startsWith("/favorites");
   if (href === "/search") return pathname === "/search";
   return false;
 }
@@ -123,9 +126,13 @@ export default function VelorNav() {
               <span>LIVE</span>
             </div>
 
+            <div className="hidden md:block">
+              <CommandPalette />
+            </div>
+
             <Link
               href="/search"
-              className="hidden md:flex text-text-secondary hover:text-text-primary transition-colors"
+              className="md:hidden flex text-text-secondary hover:text-text-primary transition-colors"
               aria-label="Search"
             >
               <Search className="w-4 h-4" />

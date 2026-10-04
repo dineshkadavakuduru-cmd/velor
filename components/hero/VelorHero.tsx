@@ -135,7 +135,7 @@ export default function VelorHero({ liveCount = 0, matchCount = 0, leagueCount =
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 lg:hidden" data-hero-data-rail>
+      <div className="absolute bottom-0 left-0 right-0" data-hero-data-rail>
         <HeroDataRail
           liveCount={liveCount}
           matchCount={matchCount}

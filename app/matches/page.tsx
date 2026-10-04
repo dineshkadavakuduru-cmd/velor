@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { createProvider } from "@/lib/api";
+import { createRegistry } from "@/lib/api";
+import { getEnabledSports } from "@/lib/api/sports";
 import type { Match, League } from "@/lib/types/sports";
 import { validateMatchFilters } from "@/lib/api/validate";
 import LiveHeader from "@/components/live/LiveHeader";
@@ -23,15 +24,47 @@ async function getFilteredMatches(
   searchParams?: Record<string, string | string[] | undefined>
 ): Promise<{ matches: Match[]; leagues: League[] }> {
   const filters = validateMatchFilters(searchParams ?? {});
-  const sportId = filters.sport ?? "football";
-  const provider = createProvider(sportId);
+  const registry = createRegistry();
 
-  const [matches, leagues] = await Promise.all([
-    provider.getMatches(filters),
-    provider.getLeagues(),
-  ]);
+  if (filters.sport) {
+    const provider = registry.getProvider(filters.sport);
+    const [matches, leagues] = await Promise.all([
+      provider.getMatches(filters),
+      provider.getLeagues(),
+    ]);
+    return { matches, leagues };
+  }
 
-  return { matches, leagues };
+  const sports = getEnabledSports();
+  const results = await Promise.allSettled(
+    sports.map(async (sport) => {
+      const provider = registry.getProvider(sport.id);
+      const [matches, leagues] = await Promise.all([
+        provider.getMatches(filters),
+        provider.getLeagues(),
+      ]);
+      return { matches, leagues };
+    })
+  );
+
+  const allMatches: Match[] = [];
+  const allLeagues: League[] = [];
+  let anySuccess = false;
+
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      anySuccess = true;
+      allMatches.push(...r.value.matches);
+      allLeagues.push(...r.value.leagues);
+    }
+  }
+
+  if (!anySuccess && sports.length > 0) {
+    const firstReject = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+    throw firstReject?.reason ?? new Error("SPORTS_DATA_UNAVAILABLE");
+  }
+
+  return { matches: allMatches, leagues: allLeagues };
 }
 
 function ProviderUnavailable() {

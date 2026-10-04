@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { createProvider } from "@/lib/api";
+import { createRegistry } from "@/lib/api";
+import { getEnabledSports } from "@/lib/api/sports";
+import type { SearchResult } from "@/lib/types/sports";
 import { validateSearchQuery } from "@/lib/api/validate";
 
 export const dynamic = "force-dynamic";
@@ -18,16 +20,36 @@ export async function GET(request: Request) {
       return NextResponse.json({ query: "", results: [], total: 0 });
     }
 
-    const provider = createProvider();
-    const results = await Promise.race([
-      provider.search({ query, limit: 20 }),
+    const registry = createRegistry();
+    const enabledSports = getEnabledSports();
+    const searchPromises = enabledSports.map((sport) =>
+      registry.getProvider(sport.id).search({ query, limit: 15 })
+    );
+
+    const settledResults = await Promise.race([
+      Promise.allSettled(searchPromises),
       new Promise<never>((_, reject) => {
         controller.signal.addEventListener("abort", () => reject(new Error("SEARCH_TIMEOUT")));
       }),
     ]);
-    const searchResults = results as Awaited<ReturnType<typeof provider.search>>;
-    const filtered = searchResults.filter((r) => {
-      const q = query.toLowerCase();
+
+    const allResults: SearchResult[] = [];
+    const seen = new Set<string>();
+
+    for (const r of settledResults) {
+      if (r.status === "fulfilled") {
+        for (const item of r.value) {
+          const key = `${item.type}:${item.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            allResults.push(item);
+          }
+        }
+      }
+    }
+
+    const q = query.toLowerCase();
+    const filtered = allResults.filter((r) => {
       return (
         r.name.toLowerCase().includes(q) ||
         r.subtitle?.toLowerCase().includes(q)

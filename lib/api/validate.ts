@@ -72,6 +72,14 @@ export function validateMatchId(id: string): string | null {
   return trimmed;
 }
 
+export function validatePlayerId(id: string): string | null {
+  if (!id || typeof id !== "string") return null;
+  const trimmed = id.trim();
+  if (trimmed.length === 0) return null;
+  if (!LEAGUE_ID_PATTERN.test(trimmed)) return null;
+  return trimmed;
+}
+
 export function getFirstValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
   return value;

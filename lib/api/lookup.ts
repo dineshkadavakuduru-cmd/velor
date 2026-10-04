@@ -1,5 +1,5 @@
 import { getEnabledSports, isSportEnabled } from "./sports";
-import type { League, Match, Team } from "@/lib/types/sports";
+import type { League, Match, Team, Player, PlayerMatchStats } from "@/lib/types/sports";
 import type { SportsProvider } from "./types";
 import type { ProviderRegistry } from "./providers/registry";
 
@@ -19,19 +19,29 @@ async function findEntity<T>(
   sportId: string | undefined,
   getEntity: (provider: SportsProvider) => Promise<T | null>
 ): Promise<EntityLookup<T> | null> {
+  const candidates = candidateSports(sportId);
   let lastError: unknown;
+  let errorCount = 0;
 
-  for (const candidate of candidateSports(sportId)) {
+  for (const candidate of candidates) {
     const provider = registry.getProvider(candidate);
     try {
       const entity = await getEntity(provider);
       if (entity) return { entity, provider, sportId: candidate };
     } catch (error) {
       lastError = error;
+      errorCount++;
     }
   }
 
-  if (lastError) throw lastError;
+  if (sportId && lastError) {
+    throw lastError;
+  }
+
+  if (errorCount === candidates.length && lastError) {
+    throw lastError;
+  }
+
   return null;
 }
 
@@ -46,3 +56,12 @@ export function findTeam(registry: ProviderRegistry, id: string, sportId?: strin
 export function findLeague(registry: ProviderRegistry, id: string, sportId?: string) {
   return findEntity<League>(registry, sportId, (provider) => provider.getLeague(id));
 }
+
+export function findPlayer(registry: ProviderRegistry, id: string, sportId?: string) {
+  return findEntity<Player>(registry, sportId, (provider) => provider.getPlayer ? provider.getPlayer(id) : Promise.resolve(null));
+}
+
+export const getMatchAcrossSports = findMatch;
+export const getTeamAcrossSports = findTeam;
+export const getLeagueAcrossSports = findLeague;
+export const getPlayerAcrossSports = findPlayer;

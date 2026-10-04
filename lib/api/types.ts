@@ -7,6 +7,7 @@ import type {
   MatchEvent,
   MatchStatistics,
   MatchLineup,
+  PlayerMatchStats,
   SearchResult,
 } from "@/lib/types/sports";
 
@@ -63,11 +64,14 @@ export interface SportsProvider {
   getTeams(params?: GetTeamsParams): Promise<Team[]>;
   getTeam(id: string): Promise<Team | null>;
   getPlayers(params?: GetPlayersParams): Promise<Player[]>;
+  getPlayer?(id: string): Promise<Player | null>;
+  getTeamSquad?(teamId: string): Promise<Player[]>;
   getStandings(params: GetStandingsParams): Promise<Standing[]>;
   search(params: SearchParams): Promise<SearchResult[]>;
   getMatchEvents(params: GetMatchEventsParams): Promise<MatchEvent[]>;
   getMatchStatistics(params: GetMatchStatisticsParams): Promise<MatchStatistics[]>;
   getMatchLineups(params: GetMatchLineupsParams): Promise<MatchLineup[]>;
+  getPlayerMatchStats?(params: { playerId: string; matchId?: string }): Promise<PlayerMatchStats[]>;
 }
 
 export interface SportsProviderFactory {
@@ -83,5 +87,6 @@ export type {
   MatchEvent,
   MatchStatistics,
   MatchLineup,
+  PlayerMatchStats,
   SearchResult,
 } from "@/lib/types/sports";

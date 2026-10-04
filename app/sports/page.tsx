@@ -62,11 +62,17 @@ export default async function SportsPage() {
         return { sportId: sport.id, leagues: sportLeagues, matches: sportMatches };
       })
     );
+    let atLeastOneSuccess = false;
     for (const result of sportResults) {
       if (result.status === "fulfilled") {
+        atLeastOneSuccess = true;
         leagues.push(...result.value.leagues);
         matches.push(...result.value.matches);
       }
+    }
+    if (!atLeastOneSuccess && enabledSports.length > 0) {
+      const firstReject = sportResults.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+      throw firstReject?.reason ?? new Error("SPORTS_DATA_UNAVAILABLE");
     }
   } catch (error) {
     hasError = true;

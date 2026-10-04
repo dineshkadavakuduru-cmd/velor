@@ -127,25 +127,28 @@ describe("MockSportsProvider.getMatches", () => {
 });
 
 describe("MockSportsProvider.getMatchEvents", () => {
-  it("returns empty array", async () => {
+  it("returns events for match", async () => {
     const provider = new MockSportsProvider();
     const events = await provider.getMatchEvents({ matchId: "match-1" });
-    assert.deepStrictEqual(events, []);
+    assert.ok(events.length > 0);
+    assert.ok(events.every((e) => e.matchId === "match-1"));
   });
 });
 
 describe("MockSportsProvider.getMatchStatistics", () => {
-  it("returns empty array", async () => {
+  it("returns statistics for match", async () => {
     const provider = new MockSportsProvider();
     const stats = await provider.getMatchStatistics({ matchId: "match-1" });
-    assert.deepStrictEqual(stats, []);
+    assert.ok(stats.length > 0);
+    assert.ok(stats.every((s) => s.matchId === "match-1"));
   });
 });
 
 describe("MockSportsProvider.getMatchLineups", () => {
-  it("returns empty array", async () => {
+  it("returns lineups for match", async () => {
     const provider = new MockSportsProvider();
     const lineups = await provider.getMatchLineups({ matchId: "match-1" });
-    assert.deepStrictEqual(lineups, []);
+    assert.ok(lineups.length > 0);
+    assert.ok(lineups.every((l) => l.matchId === "match-1"));
   });
 });

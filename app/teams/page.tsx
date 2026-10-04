@@ -58,13 +58,20 @@ async function TeamsContent() {
 
   try {
     const registry = createRegistry();
+    const sports = getEnabledSports();
     const results = await Promise.allSettled(
-      getEnabledSports().map((sport) => registry.getProvider(sport.id).getTeams())
+      sports.map((sport) => registry.getProvider(sport.id).getTeams())
     );
+    let atLeastOneSuccess = false;
     for (const result of results) {
       if (result.status === "fulfilled") {
+        atLeastOneSuccess = true;
         teams.push(...result.value);
       }
+    }
+    if (!atLeastOneSuccess && sports.length > 0) {
+      const firstReject = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+      throw firstReject?.reason ?? new Error("SPORTS_DATA_UNAVAILABLE");
     }
   } catch (error) {
     hasError = true;

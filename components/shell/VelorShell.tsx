@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { createProvider } from "@/lib/api";
+import { createRegistry } from "@/lib/api";
+import { getEnabledSports } from "@/lib/api/sports";
 import type { Match, Team, League } from "@/lib/types/sports";
 import IntroClient from "./IntroClient";
 import VelorHero from "../hero/VelorHero";
@@ -7,14 +8,16 @@ import MatchCard from "../ui/MatchCard";
 import TeamCard from "../ui/TeamCard";
 import LeagueCard from "../ui/LeagueCard";
 import SectionHeader from "../ui/SectionHeader";
-import EmptyState from "../ui/EmptyState";
-import ErrorState from "../ui/ErrorState";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
+import LiveTicker from "@/components/live/LiveTicker";
 import Link from "next/link";
 
 export default function VelorShell() {
   return (
     <IntroClient>
       <div className="min-h-screen flex flex-col bg-background">
+        <LiveTickerWrapper />
         <main className="flex-1 relative overflow-hidden">
           <Suspense
             fallback={
@@ -51,26 +54,61 @@ export default function VelorShell() {
     </IntroClient>
   );
 }
-async function HeroContent() {
-  let liveMatches: Match[] = [];
-  let allMatches: Match[] = [];
-  let leagues: League[] = [];
-  let teams: Team[] = [];
+
+async function LiveTickerWrapper() {
+  const matches: Match[] = [];
 
   try {
-    const provider = createProvider();
-    const [liveResult, allMatchesResult, leaguesResult, teamsResult] = await Promise.all([
-      provider.getLiveMatches(),
-      provider.getMatches(),
-      provider.getLeagues(),
-      provider.getTeams(),
-    ]);
-    liveMatches = liveResult;
-    allMatches = allMatchesResult;
-    leagues = leaguesResult;
-    teams = teamsResult;
+    const registry = createRegistry();
+    const sports = getEnabledSports();
+    const results = await Promise.allSettled(
+      sports.map((sport) => registry.getProvider(sport.id).getLiveMatches())
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        matches.push(...result.value);
+      }
+    }
   } catch {
-    // Hero can render without data
+    // Silently fail - ticker just won't show
+  }
+
+  return <LiveTicker matches={matches} />;
+}
+
+async function HeroContent() {
+  const liveMatches: Match[] = [];
+  const allMatches: Match[] = [];
+  const leagues: League[] = [];
+  const teams: Team[] = [];
+
+  try {
+    const registry = createRegistry();
+    const sports = getEnabledSports();
+    const results = await Promise.allSettled(
+      sports.map(async (sport) => {
+        const provider = registry.getProvider(sport.id);
+        const [liveResult, allMatchesResult, leaguesResult, teamsResult] = await Promise.all([
+          provider.getLiveMatches(),
+          provider.getMatches(),
+          provider.getLeagues(),
+          provider.getTeams(),
+        ]);
+        return { live: liveResult, matches: allMatchesResult, leagues: leaguesResult, teams: teamsResult };
+      })
+    );
+
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        liveMatches.push(...r.value.live);
+        allMatches.push(...r.value.matches);
+        leagues.push(...r.value.leagues);
+        teams.push(...r.value.teams);
+      }
+    }
+  } catch {
+    // Hero can render with 0 defaults
   }
 
   return (
@@ -82,28 +120,51 @@ async function HeroContent() {
     />
   );
 }
+
 async function HomeSections() {
-  let liveMatches: Match[] = [];
+  const liveMatches: Match[] = [];
   let upcomingMatches: Match[] = [];
-  let leagues: League[] = [];
-  let teams: Team[] = [];
+  const leagues: League[] = [];
+  const teams: Team[] = [];
   let hasError = false;
 
   try {
-    const provider = createProvider();
-    const [liveResult, allMatches, leaguesResult, teamsResult] = await Promise.all([
-      provider.getLiveMatches(),
-      provider.getMatches(),
-      provider.getLeagues(),
-      provider.getTeams(),
-    ]);
-    liveMatches = liveResult;
-    upcomingMatches = allMatches
-      .filter((m) => m.status === "scheduled")
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-      .slice(0, 6);
-    leagues = leaguesResult;
-    teams = teamsResult.slice(0, 8);
+    const registry = createRegistry();
+    const sports = getEnabledSports();
+    const results = await Promise.allSettled(
+      sports.map(async (sport) => {
+        const provider = registry.getProvider(sport.id);
+        const [liveResult, allMatches, leaguesResult, teamsResult] = await Promise.all([
+          provider.getLiveMatches(),
+          provider.getMatches(),
+          provider.getLeagues(),
+          provider.getTeams(),
+        ]);
+        return { live: liveResult, matches: allMatches, leagues: leaguesResult, teams: teamsResult };
+      })
+    );
+
+    let anySuccess = false;
+    const allMatchesList: Match[] = [];
+
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        anySuccess = true;
+        liveMatches.push(...r.value.live);
+        allMatchesList.push(...r.value.matches);
+        leagues.push(...r.value.leagues);
+        teams.push(...r.value.teams);
+      }
+    }
+
+    if (!anySuccess && sports.length > 0) {
+      hasError = true;
+    } else {
+      upcomingMatches = allMatchesList
+        .filter((m) => m.status === "scheduled")
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+        .slice(0, 6);
+    }
   } catch {
     hasError = true;
   }
@@ -174,7 +235,7 @@ async function HomeSections() {
             count={teams.length}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams.map((team) => (
+            {teams.slice(0, 8).map((team) => (
               <TeamCard key={team.id} team={team} href={`/team/${team.id}`} />
             ))}
           </div>
@@ -191,6 +252,8 @@ async function HomeSections() {
           {[
             { name: "Football", href: "/matches?sport=football", icon: "FOOT" },
             { name: "Basketball", href: "/matches?sport=basketball", icon: "BASK" },
+            { name: "Cricket", href: "/matches?sport=cricket", icon: "CRIC" },
+            { name: "Tennis", href: "/matches?sport=tennis", icon: "TENN" },
             { name: "Live Matches", href: "/live", icon: "LIVE" },
             { name: "All Leagues", href: "/leagues", icon: "LEAG" },
           ].map((item) => (
@@ -224,4 +287,3 @@ async function HomeSections() {
     </div>
   );
 }
-

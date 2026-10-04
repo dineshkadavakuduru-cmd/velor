@@ -44,8 +44,10 @@ export interface MatchEvent {
   minute: number;
   teamId: TeamId;
   playerName: string;
+  playerId?: PlayerId;
   detail?: string;
   assistPlayerName?: string;
+  assistPlayerId?: PlayerId;
 }
 
 export interface MatchStatistics {
@@ -86,7 +88,7 @@ export interface PlayerMatchStats {
   stats: Record<string, number | string>;
 }
 
-export type SearchResultType = "team" | "league" | "match";
+export type SearchResultType = "team" | "league" | "match" | "player";
 
 export interface SearchResult {
   type: SearchResultType;
@@ -138,6 +140,10 @@ export interface Player {
   name: string;
   position?: string;
   teamId?: TeamId;
+  sportId?: SportId;
+  nationality?: string;
+  dateOfBirth?: string;
+  jerseyNumber?: number;
   stats?: Record<string, unknown>;
 }
 

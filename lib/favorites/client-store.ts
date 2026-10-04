@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { loadFavorites, saveFavorites, toggleFavorite } from "./storage";
+import { loadFavorites, saveFavorites, subscribeFavorites, toggleFavorite } from "./storage";
 import type { FavoriteItem, FavoritesStore } from "./types";
 
 const EMPTY_STORE: FavoritesStore = {
@@ -24,6 +24,10 @@ function initialize() {
 function subscribe(listener: () => void) {
   listeners.add(listener);
   initialize();
+  const unsubscribeFavorites = subscribeFavorites(() => {
+    snapshot = loadFavorites();
+    listeners.forEach((currentListener) => currentListener());
+  });
   const onStorage = (event: StorageEvent) => {
     if (event.key === "velor_favorites_v1") {
       snapshot = loadFavorites();
@@ -33,6 +37,7 @@ function subscribe(listener: () => void) {
   window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(listener);
+    unsubscribeFavorites();
     window.removeEventListener("storage", onStorage);
   };
 }

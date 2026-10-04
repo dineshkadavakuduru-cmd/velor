@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { Heart } from "lucide-react";
 import type { FavoriteItem } from "@/lib/favorites/types";
 import { toggleFavoriteItem, useFavorites } from "@/lib/favorites/client-store";
-import type { FavoritesStore } from "@/lib/favorites/types";
+import { isFavorite } from "@/lib/favorites/storage";
 
 interface FavoriteButtonProps {
   item: FavoriteItem;
@@ -13,10 +13,10 @@ interface FavoriteButtonProps {
 
 export default function FavoriteButton({ item, onToggle }: FavoriteButtonProps) {
   const favorites = useFavorites();
-  const active = isFavorite(favorites, item.type, item.id, item.sportId);
+  const active = isFavorite(favorites, item);
 
   const handleClick = useCallback(() => {
-    const nextActive = !isFavorite(favorites, item.type, item.id, item.sportId);
+    const nextActive = !isFavorite(favorites, item);
     toggleFavoriteItem(item);
     onToggle?.(item, nextActive);
   }, [favorites, item, onToggle]);
@@ -25,6 +25,7 @@ export default function FavoriteButton({ item, onToggle }: FavoriteButtonProps) 
     <button
       type="button"
       onClick={(event) => {
+        event.preventDefault();
         event.stopPropagation();
         handleClick();
       }}
@@ -42,13 +43,4 @@ export default function FavoriteButton({ item, onToggle }: FavoriteButtonProps) 
       <Heart className={`h-4 w-4 ${active ? "fill-current" : ""}`} />
     </button>
   );
-}
-
-function isFavorite(store: FavoritesStore, type: FavoriteItem["type"], id: string, sportId?: string): boolean {
-  const list = type === "team" ? store.teams : type === "league" ? store.leagues : store.matches;
-  return list.some((entry) => {
-    if (entry.id !== id) return false;
-    if (sportId && entry.sportId && entry.sportId !== sportId) return false;
-    return true;
-  });
 }
