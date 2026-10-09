@@ -214,6 +214,14 @@ export function assembleSnapshot(
   const unavailableSports: SportsSnapshot["unavailableSports"] = [];
   let misconfigured = false;
   let partialFailure = false;
+  // Global id registry: match ids must be unique across the whole dataset.
+  // Providers use independent id spaces (and mock/fallback providers repeat
+  // the same fixtures per sport), so without this the same id would be
+  // counted once per sport — inflating totals with unaddressable duplicates
+  // (/match/[id] can only resolve one entity per id). First sport wins;
+  // per-sport counters below reflect actual dataset contribution so every
+  // number on every page adds up.
+  const seenMatchIds = new Set<string>();
 
   for (const input of inputs) {
     const { sportId, sportName, liveResult, fixturesResult, leaguesResult, teamsResult } = input;
@@ -257,13 +265,19 @@ export function assembleSnapshot(
     if (liveOk || matchesOk) {
       // Endpoints succeeded — even if filters leave zero matches, that is
       // an honest empty result, NOT an unavailable sport.
-      matches.push(...sportMatchList);
+      // Global dedupe: skip ids already contributed by another sport.
+      const contributed = sportMatchList.filter((m) => {
+        if (seenMatchIds.has(m.id)) return false;
+        seenMatchIds.add(m.id);
+        return true;
+      });
+      matches.push(...contributed);
       perSport.push({
         sportId,
         sportName,
         state: "ok",
-        matchCount: sportMatchList.length,
-        liveCount: sportMatchList.filter(isLiveMatch).length,
+        matchCount: contributed.length,
+        liveCount: contributed.filter(isLiveMatch).length,
       });
       if (!liveOk || !matchesOk) {
         // One endpoint failed — dataset for this sport is partial.

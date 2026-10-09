@@ -52,15 +52,20 @@ export function createProvider(sportId: string = "football"): SportsProvider {
     defaultProvider = new MockSportsProvider();
   }
 
-  if (basketballKey) {
+  // Mock mode must be pure-mock: keys alone must never silently mix real
+  // provider data into the mock dataset (or vice versa), or pages render
+  // franken-datasets that disagree with each other.
+  const useRealProviders = mode !== "mock";
+
+  if (useRealProviders && basketballKey) {
     basketballProviderInstance = new BasketballProvider(basketballKey);
   }
 
-  if (cricketKey) {
+  if (useRealProviders && cricketKey) {
     cricketProviderInstance = new CricketProvider(cricketKey);
   }
 
-  if (tennisKey) {
+  if (useRealProviders && tennisKey) {
     tennisProviderInstance = new TennisProvider(tennisKey);
   }
 
@@ -99,15 +104,20 @@ export function createRegistry(): ReturnType<typeof createProviderRegistry> {
     defaultProvider = new MockSportsProvider();
   }
 
-  if (basketballKey) {
+  // Mock mode must be pure-mock: keys alone must never silently mix real
+  // provider data into the mock dataset (or vice versa), or pages render
+  // franken-datasets that disagree with each other.
+  const useRealProviders = mode !== "mock";
+
+  if (useRealProviders && basketballKey) {
     basketballProviderInstance = new BasketballProvider(basketballKey);
   }
 
-  if (cricketKey) {
+  if (useRealProviders && cricketKey) {
     cricketProviderInstance = new CricketProvider(cricketKey);
   }
 
-  if (tennisKey) {
+  if (useRealProviders && tennisKey) {
     tennisProviderInstance = new TennisProvider(tennisKey);
   }
 

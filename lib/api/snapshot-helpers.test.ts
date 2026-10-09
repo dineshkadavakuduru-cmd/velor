@@ -379,8 +379,7 @@ describe("assembleSnapshot — one canonical source", () => {
     );
   });
 
-  it("fulfilled-but-empty endpoints are honest emptiness, not failure (stale snapshot carries its timestamp)", () => {
-    const snapshot = assembleSnapshot(
+  it("fulfilled-but-empty endpoints are honest emptiness, not failure (stale snapshot carries its timestamp)", () => {    const snapshot = assembleSnapshot(
       [sportInput("cricket", "Cricket")],
       undefined,
       SYNCED_AT
@@ -395,5 +394,29 @@ describe("assembleSnapshot — one canonical source", () => {
       leagues: 0,
       teams: 0,
     });
+  });
+
+  it("dedupes match ids globally across sports (no double-counting)", () => {
+    const league = makeLeague("l1", "League 1");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+    const shared = [
+      makeMatch("dup-1", "live", league, h, a),
+      makeMatch("dup-2", "scheduled", league, h, a),
+    ];
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("football", "Football", { fixturesResult: ok(shared) }),
+        sportInput("cricket", "Cricket", { fixturesResult: ok(shared) }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+    // Same ids from two sports enter the dataset exactly once.
+    assert.strictEqual(snapshot.matches.length, 2);
+    assert.strictEqual(snapshot.stats.matches, 2);
+    assert.strictEqual(snapshot.stats.liveMatches, 1);
+    const perSportSum = snapshot.perSport.reduce((sum, s) => sum + s.liveCount, 0);
+    assert.strictEqual(perSportSum, snapshot.stats.liveMatches);
   });
 });

@@ -119,4 +119,24 @@ describe("createProvider / createRegistry environment handling", () => {
       assert.ok(football instanceof MockSportsProvider);
     });
   });
+
+  describe("VELOR_SPORTS_PROVIDER=mock", () => {
+    it("is pure-mock: keys alone never mix real providers into the dataset", async () => {
+      setEnv({
+        VELOR_SPORTS_PROVIDER: "mock",
+        VELOR_API_SPORTS_KEY: "some-key",
+        VELOR_BASKETBALL_API_KEY: "some-key",
+        VELOR_CRICKET_API_KEY: "some-key",
+        VELOR_TENNIS_API_KEY: "some-key",
+      });
+      const { createRegistry, MockSportsProvider } = await import("./index");
+      const reg = createRegistry();
+      for (const sport of ["football", "basketball", "cricket", "tennis"]) {
+        assert.ok(
+          reg.getProvider(sport) instanceof MockSportsProvider,
+          `Expected ${sport} to resolve to MockSportsProvider in mock mode`
+        );
+      }
+    });
+  });
 });

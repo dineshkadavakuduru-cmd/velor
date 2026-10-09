@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { connection } from "next/server";
 import { createRegistry } from "@/lib/api";
 import { getEnabledSports } from "@/lib/api/sports";
 import {
@@ -44,6 +45,13 @@ export type {
  */
 export const getSportsSnapshot = cache(
   async (filters?: GetMatchesParams): Promise<SportsSnapshot> => {
+    // Request-time rendering only: this snapshot must NEVER be baked into a
+    // build-time prerender or served as a stale static generation. Every
+    // page (/live, /matches, /teams, …) renders the current assembly over
+    // shared Data-Cache upstream payloads, so pages cannot disagree.
+    // (Upstream fetch revalidation windows still apply — this only defers
+    // rendering to request time; it does not bypass the fetch cache.)
+    await connection();
     const syncedAt = new Date().toISOString();
 
     let registry: ReturnType<typeof createRegistry>;
