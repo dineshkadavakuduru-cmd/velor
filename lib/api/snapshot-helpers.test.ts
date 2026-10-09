@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import {
   isLiveMatch,
+  shouldAcceptLivePayload,
   deriveTeamsFromMatches,
   deriveLeaguesFromMatches,
   rankFeaturedLeagues,
@@ -46,6 +47,25 @@ describe("isLiveMatch", () => {
     assert.strictEqual(isLiveMatch(makeMatch("3", "scheduled", league, home, away)), false);
     assert.strictEqual(isLiveMatch(makeMatch("4", "finished", league, home, away)), false);
     assert.strictEqual(isLiveMatch(makeMatch("5", "postponed", league, home, away)), false);
+  });
+});
+
+describe("shouldAcceptLivePayload", () => {
+  it("accepts any payload when every provider succeeded", () => {
+    assert.strictEqual(shouldAcceptLivePayload(25, 25, false), true);
+    assert.strictEqual(shouldAcceptLivePayload(25, 0, false), true);
+    assert.strictEqual(shouldAcceptLivePayload(0, 0, false), true);
+  });
+
+  it("rejects a thinner degraded payload (provider failure, not an empty world)", () => {
+    assert.strictEqual(shouldAcceptLivePayload(25, 0, true), false);
+    assert.strictEqual(shouldAcceptLivePayload(25, 10, true), false);
+  });
+
+  it("accepts a degraded payload that is not thinner", () => {
+    assert.strictEqual(shouldAcceptLivePayload(25, 25, true), true);
+    assert.strictEqual(shouldAcceptLivePayload(0, 0, true), true);
+    assert.strictEqual(shouldAcceptLivePayload(5, 9, true), true);
   });
 });
 

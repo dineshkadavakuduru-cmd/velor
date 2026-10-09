@@ -9,6 +9,22 @@ export function isLiveMatch(match: Match): boolean {
   return match.status === "live" || match.status === "halftime";
 }
 
+/**
+ * Guard for the /live client poller: never replace a fuller good list with a
+ * thinner degraded one. A degraded 200 response means at least one provider
+ * failed — a thin/empty payload then describes the failure, not the world.
+ * Trust an empty list only when every provider succeeded (degraded === false),
+ * i.e. matches genuinely ended.
+ */
+export function shouldAcceptLivePayload(
+  prevLiveCount: number,
+  nextLiveCount: number,
+  degraded: boolean
+): boolean {
+  if (!degraded) return true;
+  return nextLiveCount >= prevLiveCount;
+}
+
 export function deriveTeamsFromMatches(matches: Match[]): Team[] {
   const unique = new Map<string, Team>();
   for (const match of matches) {

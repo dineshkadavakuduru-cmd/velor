@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition } from "react";
+import { useState, useEffect, useCallback, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Match } from "@/lib/types/sports";
-import { isLiveMatch } from "@/lib/api/snapshot-helpers";
+import { isLiveMatch, shouldAcceptLivePayload } from "@/lib/api/snapshot-helpers";
 import LiveHeader from "@/components/live/LiveHeader";
 import LiveMatchList from "@/components/live/LiveMatchList";
 import DataFreshness from "@/components/ui/DataFreshness";
@@ -29,8 +29,16 @@ export default function LiveFeedClient({
   const [matches, setMatches] = useState<Match[]>(initialMatches);
   const [syncedAt, setSyncedAt] = useState(initialSyncedAt);
   const [pollFailed, setPollFailed] = useState(false);
+  // Degraded status of the latest accepted payload (init: server snapshot).
+  const [syncDegraded, setSyncDegraded] = useState(degraded);
+  const [unavailable, setUnavailable] = useState(unavailableSports);
   const [countdown, setCountdown] = useState(30);
   const [isRefreshing, startTransition] = useTransition();
+  // Mirror of the currently displayed live count for the accept-guard below.
+  const liveCountRef = useRef(initialMatches.filter(isLiveMatch).length);
+  useEffect(() => {
+    liveCountRef.current = matches.filter(isLiveMatch).length;
+  }, [matches]);
 
   const fetchLiveMatches = useCallback(async () => {
     try {
@@ -44,9 +52,19 @@ export default function LiveFeedClient({
       }
       const data = await res.json();
       const newMatches: Match[] = Array.isArray(data.matches) ? data.matches : [];
-      setMatches(newMatches);
-      if (typeof data.syncedAt === "string") {
-        setSyncedAt(data.syncedAt);
+      const payloadDegraded = data.degraded === true;
+      setSyncDegraded(payloadDegraded);
+      if (Array.isArray(data.unavailableSports)) {
+        setUnavailable(data.unavailableSports);
+      }
+      // Never swap a fuller good list for a thinner degraded one: a degraded
+      // payload describes a provider failure, not an empty world. An empty
+      // list is trusted only when every provider succeeded (matches ended).
+      if (shouldAcceptLivePayload(liveCountRef.current, newMatches.length, payloadDegraded)) {
+        setMatches(newMatches);
+        if (typeof data.syncedAt === "string") {
+          setSyncedAt(data.syncedAt);
+        }
       }
       setPollFailed(false);
     } catch {
@@ -146,9 +164,9 @@ export default function LiveFeedClient({
           </div>
         </div>
         <div className="mt-2 flex flex-col gap-1">
-          <DataFreshness syncedAt={syncedAt} degraded={degraded || pollFailed} />
-          {unavailableSports.length > 0 && (
-            <UnavailableSportsNote sports={unavailableSports} />
+          <DataFreshness syncedAt={syncedAt} degraded={pollFailed || syncDegraded} />
+          {unavailable.length > 0 && (
+            <UnavailableSportsNote sports={unavailable} />
           )}
           {pollFailed && (
             <p role="alert" className="text-[0.65rem] text-gold font-mono tracking-widest uppercase">
@@ -162,7 +180,7 @@ export default function LiveFeedClient({
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center border-b border-border-subtle">
           <p className="technical-label mb-2">NO LIVE MATCHES RIGHT NOW</p>
           <p className="text-sm text-text-secondary max-w-sm">
-            {unavailableSports.length > 0
+            {unavailable.length > 0
               ? "No live matches from available sources. Some sports could not be reached — check back later."
               : "No matches are currently in progress. Check upcoming fixtures or try refreshing."}
           </p>
