@@ -31,6 +31,15 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Client-router cache must never replay a stale dynamic page: every
+  // navigation re-renders from the server so /live, /matches, /teams, etc.
+  // always reflect the current canonical snapshot, not a previous moment.
+  // (Locks the framework default of dynamic: 0 against future drift.)
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+    },
+  },
   async headers() {
     return [
       {

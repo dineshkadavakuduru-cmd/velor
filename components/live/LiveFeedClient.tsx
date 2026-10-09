@@ -143,11 +143,11 @@ export default function LiveFeedClient({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full rounded-full opacity-75 bg-live" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-live" />
+                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${pollFailed || syncDegraded ? "bg-gold" : "bg-live"}`} style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
+                <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${pollFailed || syncDegraded ? "bg-gold" : "bg-live"}`} />
               </span>
               <span className="text-[0.65rem] text-text-secondary font-mono tracking-widest uppercase">
-                LIVE SYNC ACTIVE
+                {pollFailed || syncDegraded ? "SYNC DEGRADED" : "LIVE SYNC ACTIVE"}
               </span>
             </div>
             <span className="text-[0.65rem] text-text-secondary font-mono">

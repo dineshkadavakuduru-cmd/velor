@@ -7,8 +7,13 @@ import {
   deriveLeaguesFromMatches,
   rankFeaturedLeagues,
   rankFeaturedTeams,
+  assembleSnapshot,
+  emptySnapshot,
+  classifyError,
 } from "./snapshot-helpers";
 import type { Match, League, Team } from "@/lib/types/sports";
+import type { SportFetchInput } from "./snapshot-helpers";
+import { SportsApiError } from "./error";
 
 function makeTeam(id: string, name: string, sportId = "football"): Team {
   return { id, name, shortName: id.slice(0, 3).toUpperCase(), sportId };
@@ -153,5 +158,242 @@ describe("rankFeaturedTeams", () => {
     ];
     const ranked = rankFeaturedTeams([bench, other, star, filler], matches, 4);
     assert.strictEqual(ranked[0].id, "star");
+  });
+});
+
+function ok<T>(value: T) {
+  return { status: "fulfilled" as const, value };
+}
+
+function fail(reason: unknown) {
+  return { status: "rejected" as const, reason };
+}
+
+function sportInput(
+  sportId: string,
+  sportName: string,
+  overrides: Partial<Omit<SportFetchInput, "sportId" | "sportName">> = {}
+): SportFetchInput {
+  return {
+    sportId,
+    sportName,
+    liveResult: ok([]),
+    fixturesResult: ok([]),
+    leaguesResult: ok([]),
+    teamsResult: ok([]),
+    ...overrides,
+  };
+}
+
+const SYNCED_AT = "2026-10-09T06:00:00.000Z";
+
+describe("assembleSnapshot — one canonical source", () => {
+  it("same snapshot yields the same live count for homepage, /live and /matches", () => {
+    const league = makeLeague("l1", "League 1", "cricket");
+    const liveMatches: Match[] = Array.from({ length: 25 }, (_, i) =>
+      makeMatch(`live-${i}`, "live", league, makeTeam(`h${i}`, `Home ${i}`), makeTeam(`a${i}`, `Away ${i}`))
+    );
+    const snapshot = assembleSnapshot(
+      [sportInput("cricket", "Cricket", { fixturesResult: ok(liveMatches) })],
+      undefined,
+      SYNCED_AT
+    );
+    const homepageCount = snapshot.stats.liveMatches;
+    const livePageCount = snapshot.liveMatches.length;
+    const matchesPageCount = snapshot.matches.filter(isLiveMatch).length;
+    const perSportSum = snapshot.perSport.reduce((sum, s) => sum + s.liveCount, 0);
+    assert.strictEqual(homepageCount, 25);
+    assert.strictEqual(livePageCount, 25);
+    assert.strictEqual(matchesPageCount, 25);
+    assert.strictEqual(perSportSum, 25);
+  });
+
+  it("zero live matches is reported consistently as zero (not unavailable)", () => {
+    const league = makeLeague("l1", "League 1");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("cricket", "Cricket", {
+          fixturesResult: ok([
+            makeMatch("1", "scheduled", league, h, a),
+            makeMatch("2", "finished", league, h, a),
+            makeMatch("3", "postponed", league, h, a),
+          ]),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+    assert.deepStrictEqual(snapshot.liveMatches, []);
+    assert.strictEqual(snapshot.stats.liveMatches, 0);
+    assert.strictEqual(snapshot.hasAnySuccess, true);
+    assert.deepStrictEqual(snapshot.unavailableSports, []);
+  });
+
+  it("counts multiple live matches including halftime", () => {
+    const league = makeLeague("l1", "League 1");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("tennis", "Tennis", {
+          liveResult: ok([
+            makeMatch("1", "live", league, h, a),
+            makeMatch("2", "live", league, h, a),
+            makeMatch("3", "halftime", league, h, a),
+          ]),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+    assert.strictEqual(snapshot.stats.liveMatches, 3);
+    assert.strictEqual(snapshot.liveMatches.length, 3);
+  });
+
+  it("derives leagues when the provider supplies none (missing league)", () => {
+    const l1 = makeLeague("l1", "League 1");
+    const l2 = makeLeague("l2", "League 2");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("cricket", "Cricket", {
+          fixturesResult: ok([
+            makeMatch("1", "live", l1, h, a),
+            makeMatch("2", "scheduled", l2, h, a),
+          ]),
+          leaguesResult: ok([]),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+    assert.strictEqual(snapshot.leaguesDerivedFromMatches, true);
+    assert.strictEqual(snapshot.leagues.length, 2);
+    assert.strictEqual(snapshot.stats.leagues, 2);
+  });
+
+  it("derives teams from match participants when the provider supplies none (missing team)", () => {
+    const league = makeLeague("l1", "League 1");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("tennis", "Tennis", {
+          fixturesResult: ok([
+            makeMatch("1", "live", league, makeTeam("p1", "Player 1"), makeTeam("p2", "Player 2")),
+            makeMatch("2", "live", league, makeTeam("p1", "Player 1"), makeTeam("p3", "Player 3")),
+          ]),
+          teamsResult: ok([]),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+    assert.strictEqual(snapshot.teamsDerivedFromMatches, true);
+    assert.deepStrictEqual(
+      snapshot.teams.map((t) => t.id).sort(),
+      ["p1", "p2", "p3"]
+    );
+    assert.strictEqual(snapshot.stats.teams, 3);
+  });
+
+  it("classifies every API failure kind without inventing data", () => {
+    const kinds: Array<[unknown, string | undefined]> = [
+      [new SportsApiError({ provider: "T", endpoint: "/live", kind: "TIMEOUT", detail: "d" }), "TIMEOUT"],
+      [new SportsApiError({ provider: "T", endpoint: "/x", kind: "RATE_LIMIT", detail: "d" }), "RATE_LIMIT"],
+      [new SportsApiError({ provider: "T", endpoint: "/x", kind: "AUTH_FAILURE", detail: "d" }), "AUTH_FAILURE"],
+      [new SportsApiError({ provider: "T", endpoint: "/x", kind: "NETWORK_FAILURE", detail: "d" }), "NETWORK_FAILURE"],
+      [new SportsApiError({ provider: "T", endpoint: "/x", kind: "MALFORMED_RESPONSE", detail: "d" }), "MALFORMED_RESPONSE"],
+      [new SportsApiError({ provider: "T", endpoint: "/x", status: 500, kind: "API_ERROR", detail: "d" }), "API_ERROR"],
+      [new Error("RATE_LIMIT"), "RATE_LIMIT"],
+      [new Error("AUTH_FAILURE"), "AUTH_FAILURE"],
+      [new Error("TIMEOUT"), "TIMEOUT"],
+      [new Error("MALFORMED_RESPONSE"), "MALFORMED_RESPONSE"],
+      [new Error("API_ERROR:500"), "API_ERROR_500"],
+      [new TypeError("fetch failed"), "UNKNOWN"],
+      [new Error("boom"), "UNKNOWN"],
+    ];
+    for (const [error, kind] of kinds) {
+      assert.strictEqual(classifyError(error).errorKind, kind);
+      assert.strictEqual(classifyError(error).state, "unavailable");
+    }
+    assert.strictEqual(
+      classifyError(new Error("VELOR_SPORTS_PROVIDER=api is set but VELOR_API_SPORTS_KEY is missing")).state,
+      "misconfigured"
+    );
+  });
+
+  it("total API failure yields an empty snapshot with zero stats (empty snapshot)", () => {
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("cricket", "Cricket", {
+          liveResult: fail(new Error("TIMEOUT")),
+          fixturesResult: fail(new Error("TIMEOUT")),
+          leaguesResult: fail(new Error("TIMEOUT")),
+          teamsResult: fail(new Error("TIMEOUT")),
+        }),
+        sportInput("tennis", "Tennis", {
+          liveResult: fail(new Error("API_ERROR:500")),
+          fixturesResult: fail(new Error("API_ERROR:500")),
+          leaguesResult: fail(new Error("API_ERROR:500")),
+          teamsResult: fail(new Error("API_ERROR:500")),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+    assert.deepStrictEqual(snapshot.matches, []);
+    assert.deepStrictEqual(snapshot.liveMatches, []);
+    assert.deepStrictEqual(snapshot.stats, { liveMatches: 0, matches: 0, leagues: 0, teams: 0 });
+    assert.strictEqual(snapshot.hasAnySuccess, false);
+    assert.strictEqual(snapshot.degraded, false);
+    assert.strictEqual(snapshot.unavailableSports.length, 2);
+  });
+
+  it("partial failure degrades honestly while keeping good data", () => {
+    const league = makeLeague("l1", "League 1");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("cricket", "Cricket", {
+          fixturesResult: ok([makeMatch("1", "live", league, h, a)]),
+        }),
+        sportInput("football", "Football", {
+          liveResult: fail(new Error("AUTH_FAILURE")),
+          fixturesResult: fail(new Error("AUTH_FAILURE")),
+          leaguesResult: fail(new Error("AUTH_FAILURE")),
+          teamsResult: fail(new Error("AUTH_FAILURE")),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+    assert.strictEqual(snapshot.hasAnySuccess, true);
+    assert.strictEqual(snapshot.degraded, true);
+    assert.strictEqual(snapshot.stats.liveMatches, 1);
+    assert.deepStrictEqual(
+      snapshot.unavailableSports.map((s) => s.id),
+      ["football"]
+    );
+  });
+
+  it("fulfilled-but-empty endpoints are honest emptiness, not failure (stale snapshot carries its timestamp)", () => {
+    const snapshot = assembleSnapshot(
+      [sportInput("cricket", "Cricket")],
+      undefined,
+      SYNCED_AT
+    );
+    assert.strictEqual(snapshot.hasAnySuccess, true);
+    assert.deepStrictEqual(snapshot.unavailableSports, []);
+    // The assembly timestamp is what every freshness/stale check consumes.
+    assert.strictEqual(snapshot.syncedAt, SYNCED_AT);
+    assert.deepStrictEqual(emptySnapshot("unavailable", SYNCED_AT).stats, {
+      liveMatches: 0,
+      matches: 0,
+      leagues: 0,
+      teams: 0,
+    });
   });
 });
