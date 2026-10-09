@@ -275,7 +275,11 @@ export class TennisProvider implements SportsProvider {
       url = api("/today");
     }
 
-    const data = await withRetry<unknown>(() => tennisApiFetch(url, this.apiKey, _params?.date ? 300 : 0));
+    // "/today" uses a 60s shared cache window (same as the live endpoint)
+    // so snapshots rendered seconds apart share identical upstream data
+    // and pages cannot disagree with each other. 60s is standard
+    // live-score granularity; the freshness line shows render time honestly.
+    const data = await withRetry<unknown>(() => tennisApiFetch(url, this.apiKey, _params?.date ? 300 : 60));
     const events = extractEvents(data);
     let matches = events.map((event) => normalizeTennisMatch(event));
 
@@ -298,7 +302,7 @@ export class TennisProvider implements SportsProvider {
   async getLeagues(): Promise<League[]> {
     const liveData = await withRetry<unknown>(() => tennisApiFetch(api("/live"), this.apiKey, 300));
     const liveEvents = extractEvents(liveData);
-    const todayData = await withRetry<unknown>(() => tennisApiFetch(api("/today"), this.apiKey, 0));
+    const todayData = await withRetry<unknown>(() => tennisApiFetch(api("/today"), this.apiKey, 60));
     const todayEvents = extractEvents(todayData);
 
     const allEvents = [...liveEvents, ...todayEvents];
