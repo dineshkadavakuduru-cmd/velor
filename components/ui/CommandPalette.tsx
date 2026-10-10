@@ -15,24 +15,34 @@ const iconMap: Record<SearchResult["type"], React.ComponentType<{ className?: st
   player: User,
 };
 
+function readRecentQueries(): string[] {
+  try {
+    const stored = localStorage.getItem(RECENT_QUERIES_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [recentQueries, setRecentQueries] = useState<string[]>([]);
+  // Read the stored queries once at mount instead of via an effect: the
+  // palette renders only its trigger button until it is opened on the
+  // client, so this cannot desync server and client markup, and it avoids
+  // the extra cascading render an effect would cause.
+  const [recentQueries, setRecentQueries] = useState<string[]>(readRecentQueries);
   const [isSearching, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(RECENT_QUERIES_KEY);
-    if (stored) {
-      try {
-        setRecentQueries(JSON.parse(stored));
-      } catch {
-        setRecentQueries([]);
-      }
-    }
+  const closePalette = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    setResults([]);
   }, []);
 
   useEffect(() => {
@@ -48,20 +58,13 @@ export default function CommandPalette() {
         setOpen(true);
       }
       if (e.key === "Escape") {
-        setOpen(false);
+        closePalette();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setResults([]);
-    }
-  }, [open]);
+  }, [closePalette]);
 
   const saveRecentQuery = useCallback((q: string) => {
     const stored = q.trim();
@@ -105,9 +108,7 @@ export default function CommandPalette() {
   const handleSelect = (result: SearchResult) => {
     saveRecentQuery(result.name);
     router.push(result.href);
-    setOpen(false);
-    setQuery("");
-    setResults([]);
+    closePalette();
   };
 
   const handleRecentClick = (q: string) => {
@@ -133,7 +134,7 @@ export default function CommandPalette() {
         <>
           <div
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+            onClick={closePalette}
             aria-modal="true"
             role="dialog"
           />
@@ -225,7 +226,7 @@ export default function CommandPalette() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={closePalette}
                   className="p-1 text-text-secondary hover:text-text-primary transition-colors"
                   aria-label="Close"
                 >

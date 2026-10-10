@@ -14,7 +14,7 @@ export default function PlayerStatCard({ player, href, showFavorite = false }: P
 
   const stats = player.stats ?? {};
 
-  let statValues: { label: string; value: string }[] = [];
+  const statValues: { label: string; value: string }[] = [];
   if ("goals" in stats && typeof stats.goals === "number") {
     statValues.push({ label: "GOALS", value: String(stats.goals) });
   }
