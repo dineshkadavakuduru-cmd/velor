@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSportsSnapshot } from "@/lib/api/snapshot";
+import { buildLiveMatchesResponse } from "@/lib/api/live-response";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -22,40 +23,11 @@ export async function GET() {
     const snapshot = await getSportsSnapshot();
     clearTimeout(timeout);
 
-    if (snapshot.misconfigured && !snapshot.hasAnySuccess) {
-      return NextResponse.json(
-        {
-          matches: [],
-          syncedAt: snapshot.syncedAt,
-          degraded: false,
-          unavailableSports: snapshot.unavailableSports,
-          error: "SPORTS_DATA_MISCONFIGURED",
-          message: "Real API mode is requested but the API key is not configured on the server.",
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!snapshot.hasAnySuccess) {
-      return NextResponse.json(
-        {
-          matches: [],
-          syncedAt: snapshot.syncedAt,
-          degraded: false,
-          unavailableSports: snapshot.unavailableSports,
-          error: "SPORTS_DATA_UNAVAILABLE",
-          message: "Live match data could not be loaded from any sport.",
-        },
-        { status: 503 }
-      );
-    }
-
-    return NextResponse.json({
-      matches: snapshot.liveMatches,
-      syncedAt: snapshot.syncedAt,
-      degraded: snapshot.degraded,
-      unavailableSports: snapshot.unavailableSports,
-    });
+    // Status codes and counts come from the pure, unit-tested contract in
+    // lib/api/live-response.ts: 200 data (possibly degraded), 503 no sport
+    // reachable, 500 misconfigured.
+    const { status, body } = buildLiveMatchesResponse(snapshot);
+    return NextResponse.json(body, { status });
   } catch {
     clearTimeout(timeout);
     return NextResponse.json(

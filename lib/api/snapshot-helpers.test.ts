@@ -14,6 +14,8 @@ import {
 import type { Match, League, Team } from "@/lib/types/sports";
 import type { SportFetchInput } from "./snapshot-helpers";
 import { SportsApiError } from "./error";
+import { buildLiveMatchesResponse } from "./live-response";
+import { isStaleSync } from "../utils/freshness";
 
 function makeTeam(id: string, name: string, sportId = "football"): Team {
   return { id, name, shortName: id.slice(0, 3).toUpperCase(), sportId };
@@ -419,4 +421,178 @@ describe("assembleSnapshot — one canonical source", () => {
     const perSportSum = snapshot.perSport.reduce((sum, s) => sum + s.liveCount, 0);
     assert.strictEqual(perSportSum, snapshot.stats.liveMatches);
   });
+});
+
+/**
+ * Regression coverage for the production data-integrity incident: /live once
+ * reported 0 live matches while /matches reported a non-zero live count, and
+ * /teams reported no teams at all. These tests pin every route view to the
+ * same canonical snapshot so the numbers can never diverge again.
+ */
+describe("regression — one canonical snapshot per route", () => {
+  it("agrees across homepage, /live, /matches and /api/live-matches when the live and fixtures endpoints disagree", () => {
+    const league = makeLeague("l1", "League 1");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+
+    // A provider whose two endpoints return different live sets — exactly the
+    // shape that used to make /live and /matches disagree.
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("tennis", "Tennis", {
+          liveResult: ok([
+            makeMatch("live-only-1", "live", league, h, a),
+            makeMatch("live-only-2", "halftime", league, h, a),
+            makeMatch("live-only-3", "live", league, h, a),
+          ]),
+          fixturesResult: ok([
+            makeMatch("fixtures-only-1", "live", league, h, a),
+            makeMatch("fixtures-only-2", "live", league, h, a),
+            makeMatch("scheduled-1", "scheduled", league, h, a),
+          ]),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+
+    // The union is the canonical dataset: 5 live + 1 scheduled.
+    assert.strictEqual(snapshot.stats.liveMatches, 5);
+    assert.strictEqual(snapshot.stats.matches, 6);
+    assert.strictEqual(snapshot.liveMatches.length, 5);
+
+    const routeViews = {
+      homepageHero: snapshot.stats.liveMatches,
+      livePage: snapshot.matches.filter(isLiveMatch).length,
+      matchesPage: snapshot.matches.filter(isLiveMatch).length,
+      liveApiPoller: buildLiveMatchesResponse(snapshot).body.matches.length,
+      perSportSum: snapshot.perSport.reduce((sum, s) => sum + s.liveCount, 0),
+    };
+
+    for (const [route, view] of Object.entries(routeViews)) {
+      assert.strictEqual(view, 5, `${route} disagrees with the canonical snapshot`);
+    }
+  });
+
+  it("reports a healthy zero live count as an empty state (200), never as unavailable", () => {
+    const league = makeLeague("l1", "League 1");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("tennis", "Tennis", {
+          liveResult: ok([]),
+          fixturesResult: ok([
+            makeMatch("1", "scheduled", league, h, a),
+            makeMatch("2", "finished", league, h, a),
+          ]),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+
+    assert.strictEqual(snapshot.hasAnySuccess, true);
+    assert.strictEqual(snapshot.degraded, false);
+    assert.deepStrictEqual(snapshot.unavailableSports, []);
+
+    const response = buildLiveMatchesResponse(snapshot);
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(response.body.matches, []);
+    assert.strictEqual(response.body.degraded, false);
+    assert.strictEqual(response.body.error, undefined);
+  });
+
+  it("never leaves /teams or /leagues empty while /matches has matches", () => {
+    const l1 = makeLeague("l1", "League 1");
+    const l2 = makeLeague("l2", "League 2");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("cricket", "Cricket", {
+          fixturesResult: ok([
+            makeMatch("1", "live", l1, makeTeam("p1", "Player 1"), makeTeam("p2", "Player 2")),
+            makeMatch("2", "scheduled", l2, makeTeam("p2", "Player 2"), makeTeam("p3", "Player 3")),
+          ]),
+          // Providers that expose no league/team directory endpoint at all.
+          leaguesResult: ok([]),
+          teamsResult: ok([]),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+
+    assert.strictEqual(snapshot.matches.length, 2);
+    assert.strictEqual(snapshot.leagues.length, 2);
+    assert.strictEqual(snapshot.teams.length, 3);
+    assert.strictEqual(snapshot.leaguesDerivedFromMatches, true);
+    assert.strictEqual(snapshot.teamsDerivedFromMatches, true);
+    // Derived entities are honest fallbacks, not a degraded dataset.
+    assert.strictEqual(snapshot.degraded, false);
+  });
+
+  it("returns honest error states on total API failure without inventing a single match", () => {
+    const failed = sportInput("football", "Football", {
+      liveResult: fail(new Error("TIMEOUT")),
+      fixturesResult: fail(new Error("TIMEOUT")),
+      leaguesResult: fail(new Error("TIMEOUT")),
+      teamsResult: fail(new Error("TIMEOUT")),
+    });
+    const unavailable = assembleSnapshot([failed], undefined, SYNCED_AT);
+
+    assert.strictEqual(unavailable.hasAnySuccess, false);
+    assert.deepStrictEqual(unavailable.matches, []);
+    assert.deepStrictEqual(unavailable.stats, { liveMatches: 0, matches: 0, leagues: 0, teams: 0 });
+    const unavailableResponse = buildLiveMatchesResponse(unavailable);
+    assert.strictEqual(unavailableResponse.status, 503);
+    assert.deepStrictEqual(unavailableResponse.body.matches, []);
+    assert.strictEqual(unavailableResponse.body.error, "SPORTS_DATA_UNAVAILABLE");
+
+    const misconfigured = emptySnapshot("misconfigured", SYNCED_AT);
+    const misconfiguredResponse = buildLiveMatchesResponse(misconfigured);
+    assert.strictEqual(misconfiguredResponse.status, 500);
+    assert.deepStrictEqual(misconfiguredResponse.body.matches, []);
+    assert.strictEqual(misconfiguredResponse.body.error, "SPORTS_DATA_MISCONFIGURED");
+
+    // A sport that failed must be reported as unavailable, not as zero matches.
+    assert.deepStrictEqual(
+      unavailable.unavailableSports.map((s) => s.id),
+      ["football"]
+    );
+  });
+
+  it("flags a stale snapshot as stale while keeping (not blanking) the live list", () => {
+    const league = makeLeague("l1", "League 1");
+    const h = makeTeam("h", "H");
+    const a = makeTeam("a", "A");
+    const snapshot = assembleSnapshot(
+      [
+        sportInput("football", "Football", {
+          fixturesResult: ok([makeMatch("1", "live", league, h, a)]),
+        }),
+        sportInput("basketball", "Basketball", {
+          liveResult: fail(new Error("AUTH_FAILURE")),
+          fixturesResult: fail(new Error("AUTH_FAILURE")),
+          leaguesResult: fail(new Error("AUTH_FAILURE")),
+          teamsResult: fail(new Error("AUTH_FAILURE")),
+        }),
+      ],
+      undefined,
+      SYNCED_AT
+    );
+
+    // Stale + degraded: the freshness line must warn, the data must stay.
+    assert.strictEqual(isStaleSync(snapshot.syncedAt, 15), true);
+    assert.strictEqual(snapshot.degraded, true);
+    const response = buildLiveMatchesResponse(snapshot);
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(response.body.matches.length, 1);
+    assert.strictEqual(response.body.degraded, true);
+
+    // The poller keeps the stale-but-full list instead of blanking the screen…
+    assert.strictEqual(shouldAcceptLivePayload(1, 0, true), false);
+    // …and still trusts a genuine end of matches from healthy providers.
+    assert.strictEqual(shouldAcceptLivePayload(1, 0, false), true);
+  });
+
 });
