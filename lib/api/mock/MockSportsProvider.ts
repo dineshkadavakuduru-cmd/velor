@@ -1,5 +1,5 @@
 import type { SportsProvider, GetMatchesParams, GetTeamsParams, GetStandingsParams, SearchResult, MatchEvent, MatchStatistics, MatchLineup, GetMatchEventsParams, GetPlayersParams } from "../types";
-import type { Player, PlayerMatchStats } from "@/lib/types/sports";
+import type { Player } from "@/lib/types/sports";
 import {
   mockLiveMatches,
   mockStandings,
@@ -7,7 +7,6 @@ import {
   mockMatchStatistics,
   mockMatchLineups,
   mockPlayers,
-  mockPlayerStats,
 } from "./mockData";
 
 const mockTeamSquads: Record<string, string[]> = {

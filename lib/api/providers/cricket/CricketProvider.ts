@@ -1,6 +1,7 @@
 import type { SportsProvider, GetMatchesParams, Match, League, Team, Player, Standing, MatchEvent, MatchStatistics, MatchLineup, SearchResult, GetMatchEventsParams, GetMatchStatisticsParams, GetMatchLineupsParams, SearchParams } from "../../types";
 import { normalizeCricketMatch, normalizeCricketLeague, normalizeCricketTeam } from "./normalize";
 import { buildSportsApiError, SportsApiError } from "@/lib/api/error";
+import { fetchWithLastGood } from "@/lib/api/last-good";
 
 const BASE_URL = "https://v2.cricket.sportsapipro.com";
 const PROVIDER_NAME = "CricketProvider";
@@ -119,38 +120,44 @@ function safeString(value: string | null | undefined): string | undefined {
 }
 
 async function cricketApiFetch<T>(url: string, apiKey: string, revalidate?: number): Promise<T> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  return fetchWithLastGood<T>({
+    provider: PROVIDER_NAME,
+    endpoint: url,
+    run: async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  try {
-    const res = await fetch(url, {
-      headers: { "x-api-key": apiKey },
-      next: revalidate !== undefined ? { revalidate } : undefined,
-      signal: controller.signal,
-    });
+      try {
+        const res = await fetch(url, {
+          headers: { "x-api-key": apiKey },
+          next: revalidate !== undefined ? { revalidate } : undefined,
+          signal: controller.signal,
+        });
 
-    if (res.status === 429) {
-      throw new Error("RATE_LIMIT");
-    }
+        if (res.status === 429) {
+          throw new Error("RATE_LIMIT");
+        }
 
-    if (res.status === 401 || res.status === 403) {
-      throw new Error("AUTH_FAILURE");
-    }
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("AUTH_FAILURE");
+        }
 
-    if (!res.ok) {
-      throw new Error(`API_ERROR:${res.status}`);
-    }
+        if (!res.ok) {
+          throw new Error(`API_ERROR:${res.status}`);
+        }
 
-    try {
-      return (await res.json()) as T;
-    } catch {
-      throw new Error("MALFORMED_RESPONSE");
-    }
-  } catch (error) {
-    throw buildSportsApiError(PROVIDER_NAME, url, error);
-  } finally {
-    clearTimeout(timeoutId);
-  }
+        try {
+          return (await res.json()) as T;
+        } catch {
+          throw new Error("MALFORMED_RESPONSE");
+        }
+      } catch (error) {
+        throw buildSportsApiError(PROVIDER_NAME, url, error);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    },
+  });
 }
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {

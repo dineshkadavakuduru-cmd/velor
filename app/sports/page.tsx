@@ -6,6 +6,7 @@ import LiveHeader from "@/components/live/LiveHeader";
 import ErrorState from "@/components/ui/ErrorState";
 import LeagueCard from "@/components/ui/LeagueCard";
 import DataFreshness from "@/components/ui/DataFreshness";
+import DegradedBanner from "@/components/ui/DegradedBanner";
 
 export const metadata = {
   title: "Sports — VELOR",
@@ -126,8 +127,15 @@ export default async function SportsPage() {
         showLiveIndicator={false}
       />
       <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30">
-        <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} />
+        <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} staleUpstream={snapshot.upstreamStale} />
       </div>
+      {(snapshot.degraded || snapshot.upstreamStale) && (
+        <DegradedBanner
+          degraded={snapshot.degraded}
+          upstreamStale={snapshot.upstreamStale}
+          unavailableSports={snapshot.unavailableSports.map((s) => s.name)}
+        />
+      )}
       <div className="py-6 sm:py-8">
         {sports.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center border-b border-border-subtle">

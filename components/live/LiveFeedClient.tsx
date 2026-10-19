@@ -7,6 +7,7 @@ import { isLiveMatch, shouldAcceptLivePayload } from "@/lib/api/snapshot-helpers
 import LiveHeader from "@/components/live/LiveHeader";
 import LiveMatchList from "@/components/live/LiveMatchList";
 import DataFreshness from "@/components/ui/DataFreshness";
+import DegradedBanner from "@/components/ui/DegradedBanner";
 import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 import ErrorState from "@/components/ui/ErrorState";
 
@@ -16,6 +17,8 @@ interface LiveFeedClientProps {
   initialMatches: Match[];
   syncedAt: string;
   degraded?: boolean;
+  /** True when the server snapshot served last-known-good payloads. */
+  upstreamStale?: boolean;
   unavailableSports?: { id: string; name: string; errorKind?: string }[];
 }
 
@@ -23,6 +26,7 @@ export default function LiveFeedClient({
   initialMatches,
   syncedAt: initialSyncedAt,
   degraded = false,
+  upstreamStale = false,
   unavailableSports = [],
 }: LiveFeedClientProps) {
   const router = useRouter();
@@ -31,6 +35,8 @@ export default function LiveFeedClient({
   const [pollFailed, setPollFailed] = useState(false);
   // Degraded status of the latest accepted payload (init: server snapshot).
   const [syncDegraded, setSyncDegraded] = useState(degraded);
+  // Last-known-good state of the latest accepted payload (server snapshot).
+  const [staleUpstream, setStaleUpstream] = useState(upstreamStale);
   const [unavailable, setUnavailable] = useState(unavailableSports);
   const [countdown, setCountdown] = useState(30);
   const [isRefreshing, startTransition] = useTransition();
@@ -53,7 +59,9 @@ export default function LiveFeedClient({
       const data = await res.json();
       const newMatches: Match[] = Array.isArray(data.matches) ? data.matches : [];
       const payloadDegraded = data.degraded === true;
+      const payloadStaleUpstream = data.upstreamStale === true;
       setSyncDegraded(payloadDegraded);
+      setStaleUpstream(payloadStaleUpstream);
       if (Array.isArray(data.unavailableSports)) {
         setUnavailable(data.unavailableSports);
       }
@@ -133,7 +141,7 @@ export default function LiveFeedClient({
 
   return (
     <>
-      <LiveHeader matchCount={totalMatches} />
+      <LiveHeader matchCount={totalMatches} liveState={pollFailed ? "degraded" : syncDegraded || staleUpstream ? "degraded" : "live"} />
 
       <div className="px-4 sm:px-6 lg:px-10 py-3 border-b border-border-subtle bg-surface-1/30">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -164,7 +172,15 @@ export default function LiveFeedClient({
           </div>
         </div>
         <div className="mt-2 flex flex-col gap-1">
-          <DataFreshness syncedAt={syncedAt} degraded={pollFailed || syncDegraded} />
+          <DataFreshness syncedAt={syncedAt} degraded={pollFailed || syncDegraded} staleUpstream={staleUpstream} />
+          {(pollFailed || syncDegraded || staleUpstream) && (
+            <DegradedBanner
+              degraded={syncDegraded}
+              upstreamStale={staleUpstream}
+              stale={false}
+              unavailableSports={pollFailed ? [] : unavailable.map((s) => s.name)}
+            />
+          )}
           {unavailable.length > 0 && (
             <UnavailableSportsNote sports={unavailable} />
           )}

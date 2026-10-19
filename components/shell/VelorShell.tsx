@@ -10,6 +10,7 @@ import SectionHeader from "../ui/SectionHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
 import DataFreshness from "@/components/ui/DataFreshness";
+import DegradedBanner from "@/components/ui/DegradedBanner";
 import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 import LiveTicker from "@/components/live/LiveTicker";
 import Link from "next/link";
@@ -101,7 +102,7 @@ async function HeroContent() {
       leagueCount={stats.leagues}
       teamCount={stats.teams}
       syncedAt={snapshot.syncedAt}
-      degraded={snapshot.degraded}
+      degraded={snapshot.degraded || snapshot.upstreamStale}
     />
   );
 }
@@ -157,10 +158,17 @@ async function HomeSections() {
 
   return (
     <div className="divide-y divide-border-subtle">
-      {(snapshot.degraded || snapshot.unavailableSports.length > 0) && (
+      {(snapshot.degraded || snapshot.unavailableSports.length > 0 || snapshot.upstreamStale) && (
         <div className="px-4 sm:px-6 lg:px-10 py-4 space-y-1 border-b border-border-subtle bg-surface-1/30">
+          {(snapshot.degraded || snapshot.upstreamStale) && (
+            <DegradedBanner
+              degraded={snapshot.degraded}
+              upstreamStale={snapshot.upstreamStale}
+              unavailableSports={snapshot.unavailableSports.map((s) => s.name)}
+            />
+          )}
           <UnavailableSportsNote sports={snapshot.unavailableSports} />
-          <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} />
+          <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} staleUpstream={snapshot.upstreamStale} />
         </div>
       )}
 

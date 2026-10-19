@@ -1,4 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
+import { beforeEach as __lgb } from "node:test";
+import { __resetLastGoodStore } from "../../last-good";
+__lgb(() => { __resetLastGoodStore(); });
 import assert from "node:assert";
 import { BasketballProvider } from "./BasketballProvider";
 
@@ -280,3 +283,5 @@ describe("BasketballProvider edge cases", () => {
     assert.strictEqual(threw, true);
   });
 });
+
+

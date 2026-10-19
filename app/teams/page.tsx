@@ -76,6 +76,7 @@ async function TeamsContent() {
       initialTeams={snapshot.teams}
       syncedAt={snapshot.syncedAt}
       degraded={snapshot.degraded}
+      upstreamStale={snapshot.upstreamStale}
       unavailableSports={snapshot.unavailableSports}
       teamsDerivedFromMatches={snapshot.teamsDerivedFromMatches}
     />

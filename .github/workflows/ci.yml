@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (lint, types, tests, build, secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # Deploy-blocking gate: any lint error fails this step, and the deploy
+      # job below cannot run until `verify` succeeds.
+      - name: Lint (blocks deploy)
+        run: npm run lint
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test
+      - name: No secrets in the client bundle
+        run: node scripts/check-no-public-secrets.mjs
+      - name: Build
+        run: npm run build
+
+  deploy-gate:
+    name: deploy gated on lint/types/tests
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate passed
+        run: echo "verify job passed — deploys may proceed. Configure your host (e.g. Vercel) to require the 'verify' check before promoting."

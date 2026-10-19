@@ -192,10 +192,11 @@ export default function CommandPalette() {
                         >
                           <div className="flex items-center gap-3">
                             {result.logo ? (
-                              <img
-                                src={result.logo}
-                                alt={result.name}
-                                className="w-6 h-6 object-contain"
+                              <span
+                                role="img"
+                                aria-label={result.name}
+                                className="w-6 h-6 bg-no-repeat bg-center bg-contain shrink-0"
+                                style={{ backgroundImage: `url(${result.logo})` }}
                               />
                             ) : (
                               <Icon className="w-4 h-4 text-text-secondary" />

@@ -122,10 +122,6 @@ export default function VelorNav() {
           </div>
 
           <div className="flex items-center gap-5">
-            <div className="live-indicator">
-              <span>LIVE</span>
-            </div>
-
             <div className="hidden md:block">
               <CommandPalette />
             </div>

@@ -74,6 +74,7 @@ async function LeaguesContent() {
       initialLeagues={snapshot.leagues}
       syncedAt={snapshot.syncedAt}
       degraded={snapshot.degraded}
+      upstreamStale={snapshot.upstreamStale}
       unavailableSports={snapshot.unavailableSports}
     />
   );

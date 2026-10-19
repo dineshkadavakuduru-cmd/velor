@@ -15,6 +15,8 @@ export interface PerSportSync {
   state: SportSyncState;
   /** Machine-readable failure kind for honest messaging (TIMEOUT, AUTH_FAILURE, RATE_LIMIT, ...). */
   errorKind?: string;
+  /** True when payloads came from the last-known-good fallback (upstream unreachable). */
+  servedUpstreamStale?: boolean;
   matchCount: number;
   liveCount: number;
 }
@@ -44,6 +46,8 @@ export interface SportsSnapshot {
   degraded: boolean;
   /** True when at least one sport returned data. */
   hasAnySuccess: boolean;
+  /** True when at least one sport is being served a last-known-good payload — never a silent claim of fresh data. */
+  upstreamStale: boolean;
   stats: SportsSnapshotStats;
   /** ISO timestamp of when this snapshot was assembled (last successful sync). */
   syncedAt: string;
@@ -62,6 +66,11 @@ export interface SportFetchInput {
   fixturesResult: Settled<Match[]>;
   leaguesResult: Settled<League[]>;
   teamsResult: Settled<Team[]>;
+  /**
+   * True when the provider served a last-known-good payload for this sport.
+   * The data is usable but NOT current — the UI must say so.
+   */
+  servedUpstreamStale?: boolean;
 }
 
 export function classifyError(error: unknown): { state: SportSyncState; errorKind?: string } {
@@ -104,6 +113,7 @@ export function emptySnapshot(reason: "misconfigured" | "unavailable", syncedAt:
     misconfigured: reason === "misconfigured",
     degraded: false,
     hasAnySuccess: false,
+    upstreamStale: false,
     stats: { liveMatches: 0, matches: 0, leagues: 0, teams: 0 },
     syncedAt,
   };
@@ -276,6 +286,7 @@ export function assembleSnapshot(
         sportId,
         sportName,
         state: "ok",
+        servedUpstreamStale: input.servedUpstreamStale === true,
         matchCount: contributed.length,
         liveCount: contributed.filter(isLiveMatch).length,
       });
@@ -347,6 +358,7 @@ export function assembleSnapshot(
 
   const liveMatches = matches.filter(isLiveMatch);
   const hasAnySuccess = perSport.some((s) => s.state === "ok");
+  const upstreamStale = perSport.some((s) => s.servedUpstreamStale === true);
 
   return {
     matches,
@@ -360,6 +372,7 @@ export function assembleSnapshot(
     misconfigured,
     degraded: (unavailableSports.length > 0 || partialFailure) && hasAnySuccess,
     hasAnySuccess,
+    upstreamStale,
     stats: {
       liveMatches: liveMatches.length,
       matches: matches.length,

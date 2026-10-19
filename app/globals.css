@@ -44,12 +44,6 @@
   --font-mono: var(--font-jetbrains-mono);
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
 html,
 body {
   max-width: 100vw;
@@ -108,6 +102,16 @@ body {
   border-radius: 50%;
   background: var(--live);
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Degraded state: the indicator must never read as cyan "live" when data
+   is partial or served from last-known-good — same treatment, gold color. */
+.live-indicator[data-state="degraded"] {
+  color: var(--gold);
+}
+
+.live-indicator[data-state="degraded"]::before {
+  background: var(--gold);
 }
 
 @keyframes pulse {

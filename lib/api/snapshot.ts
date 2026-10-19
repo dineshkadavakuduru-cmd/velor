@@ -7,6 +7,7 @@ import {
   classifyError,
   emptySnapshot,
 } from "./snapshot-helpers";
+import { runWithStaleCollection } from "./last-good";
 import type { GetMatchesParams } from "@/lib/api/types";
 import type { SportFetchInput, SportsSnapshot } from "./snapshot-helpers";
 
@@ -84,18 +85,26 @@ export const getSportsSnapshot = cache(
     const results = await Promise.allSettled(
       sports.map(async (sport) => {
         const provider = registry.getProvider(sport.id);
+        // Request-local stale collector: any endpoint served from the
+        // last-known-good fallback during this sport's fetches is recorded
+        // here and propagated to the snapshot/UI, so a degraded upstream can
+        // never render silently as "fresh".
+        const staleSet = new Set<string>();
         // Union of the live endpoint AND the general fixtures endpoint.
         // Some providers only return data from one of them (e.g. football's
         // general fixtures endpoint needs date/league params while
         // ?live=all works unauthenticated-param-free). The union — deduped
         // by match id — is the canonical dataset every page derives from,
         // so no page can disagree about live counts again.
-        const [liveResult, fixturesResult, leaguesResult, teamsResult] = await Promise.allSettled([
-          provider.getLiveMatches(),
-          provider.getMatches(filters),
-          provider.getLeagues(),
-          provider.getTeams(),
-        ]);
+        const settled = await runWithStaleCollection(staleSet, () =>
+          Promise.allSettled([
+            provider.getLiveMatches(),
+            provider.getMatches(filters),
+            provider.getLeagues(),
+            provider.getTeams(),
+          ])
+        );
+        const [liveResult, fixturesResult, leaguesResult, teamsResult] = settled;
         const input: SportFetchInput = {
           sportId: sport.id,
           sportName: sport.name,
@@ -103,6 +112,7 @@ export const getSportsSnapshot = cache(
           fixturesResult,
           leaguesResult,
           teamsResult,
+          servedUpstreamStale: staleSet.size > 0,
         };
         return input;
       })

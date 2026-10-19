@@ -1,4 +1,4 @@
-import type { Match, League, Team, Sport, Standing, MatchEvent, MatchStatistics, MatchLineup, LineupPlayer, Player, PlayerMatchStats } from "@/lib/types/sports";
+import type { Match, League, Team, Sport, Standing, MatchEvent, MatchStatistics, MatchLineup, Player, PlayerMatchStats } from "@/lib/types/sports";
 
 export const FOOTBALL: Sport = {
   id: "football",

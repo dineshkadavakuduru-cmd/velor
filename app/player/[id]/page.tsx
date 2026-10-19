@@ -5,7 +5,6 @@ import { validatePlayerId } from "@/lib/api/validate";
 import type { Player, Team } from "@/lib/types/sports";
 import PlayerHeader from "@/components/player/PlayerHeader";
 import PlayerMetrics from "@/components/player/PlayerMetrics";
-import PlayerStatCard from "@/components/player/PlayerStatCard";
 import LiveHeader from "@/components/live/LiveHeader";
 import ErrorState from "@/components/ui/ErrorState";
 

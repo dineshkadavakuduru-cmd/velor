@@ -1,5 +1,5 @@
 import { getEnabledSports, isSportEnabled } from "./sports";
-import type { League, Match, Team, Player, PlayerMatchStats } from "@/lib/types/sports";
+import type { League, Match, Team, Player } from "@/lib/types/sports";
 import type { SportsProvider } from "./types";
 import type { ProviderRegistry } from "./providers/registry";
 

@@ -1,4 +1,7 @@
 import { describe, it } from "node:test";
+import { beforeEach as __lgb } from "node:test";
+import { __resetLastGoodStore } from "../../last-good";
+__lgb(() => { __resetLastGoodStore(); });
 import assert from "node:assert";
 import { ApiSportsProvider } from "./ApiSportsProvider";
 
@@ -42,3 +45,5 @@ if (!apiKey) {
     });
   });
 }
+
+

@@ -7,7 +7,9 @@ import LeagueBadge from "@/components/live/LeagueBadge";
 import TeamDisplay from "@/components/live/TeamDisplay";
 import ScoreDisplay from "@/components/live/ScoreDisplay";
 import StatusBadge from "@/components/ui/StatusBadge";
+import MatchTime from "@/components/ui/MatchTime";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
+import { formatIST } from "@/lib/utils/freshness";
 import MatchTabs from "./MatchTabs";
 import Link from "next/link";
 
@@ -108,7 +110,11 @@ export default function MatchDetail({ match, stats, events, lineups }: MatchDeta
 
         <div className="mt-6 pt-4 border-t border-border-subtle">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            <DetailRow label="DATE" value={formatDate(match.startTime)} />
+            <DetailRow
+              label="DATE"
+              value={formatIST(match.startTime)}
+              detail={match.startTime ? <MatchTime iso={match.startTime} className="text-[0.65rem] text-text-secondary font-mono" /> : undefined}
+            />
             {match.venue && <DetailRow label="VENUE" value={match.venue} />}
             {match.league.country && (
               <DetailRow label="COUNTRY" value={match.league.country} />
@@ -145,27 +151,12 @@ export default function MatchDetail({ match, stats, events, lineups }: MatchDeta
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value, detail }: { label: string; value: string; detail?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="technical-label">{label}</span>
       <span className="text-sm text-text-primary">{value}</span>
+      {detail && <div>{detail}</div>}
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    const date = new Date(iso);
-    return date.toLocaleString("en-US", {
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
 }

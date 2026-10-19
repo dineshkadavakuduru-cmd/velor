@@ -1,4 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
+import { beforeEach as __lgb } from "node:test";
+import { __resetLastGoodStore } from "../../last-good";
+__lgb(() => { __resetLastGoodStore(); });
 import assert from "node:assert";
 import { CricketProvider } from "./CricketProvider";
 import { normalizeCricketMatchStatus, normalizeCricketScore } from "./normalize";
@@ -751,3 +754,5 @@ describe("CricketProvider diagnostics", () => {
     });
   });
 });
+
+

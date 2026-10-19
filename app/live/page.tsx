@@ -45,7 +45,7 @@ function LiveMatchesFallback() {
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-live" />
             </span>
             <span className="text-[0.65rem] text-text-secondary font-mono tracking-widest uppercase">
-              LIVE SYNC ACTIVE
+              CONNECTING…
             </span>
           </div>
         </div>
@@ -91,6 +91,7 @@ async function LiveMatches() {
       initialMatches={snapshot.matches}
       syncedAt={snapshot.syncedAt}
       degraded={snapshot.degraded}
+      upstreamStale={snapshot.upstreamStale}
       unavailableSports={snapshot.unavailableSports}
     />
   );

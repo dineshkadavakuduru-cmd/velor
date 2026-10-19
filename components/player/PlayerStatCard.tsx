@@ -3,10 +3,9 @@ import type { Player } from "@/lib/types/sports";
 interface PlayerStatCardProps {
   player: Player;
   href?: string;
-  showFavorite?: boolean;
 }
 
-export default function PlayerStatCard({ player, href, showFavorite = false }: PlayerStatCardProps) {
+export default function PlayerStatCard({ player, href }: PlayerStatCardProps) {
   const position = player.position ?? "Unknown";
   const teamName = player.teamId ?? "Free Agent";
   const nationality = player.nationality ?? "";

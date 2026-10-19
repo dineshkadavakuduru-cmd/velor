@@ -8,6 +8,7 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import ErrorState from "@/components/ui/ErrorState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 import DataFreshness from "@/components/ui/DataFreshness";
+import DegradedBanner from "@/components/ui/DegradedBanner";
 import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 import MatchesFilters from "./MatchesFilters";
 import EmptyState from "@/components/ui/EmptyState";
@@ -109,7 +110,14 @@ async function MatchesContent({ searchParams }: MatchesPageProps) {
         showLiveIndicator={false}
       />
       <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30 flex flex-col gap-1">
-        <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} />
+        <DataFreshness syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} staleUpstream={snapshot.upstreamStale} />
+        {(snapshot.degraded || snapshot.upstreamStale) && (
+          <DegradedBanner
+            degraded={snapshot.degraded}
+            upstreamStale={snapshot.upstreamStale}
+            unavailableSports={snapshot.unavailableSports.map((s) => s.name)}
+          />
+        )}
         {snapshot.unavailableSports.length > 0 && (
           <UnavailableSportsNote sports={snapshot.unavailableSports} />
         )}

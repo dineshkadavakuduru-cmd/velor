@@ -23,6 +23,25 @@ export function formatIST(isoTimestamp: string | undefined): string {
   return `${timeFormatter.format(date)} IST`;
 }
 
+/**
+ * "20:18" in the visitor's device timezone — or `undefined` when the
+ * environment has no Intl support / the timestamp is invalid.
+ */
+export function formatLocal(isoTimestamp: string | undefined): string | undefined {
+  if (!isoTimestamp) return undefined;
+  const date = new Date(isoTimestamp);
+  if (Number.isNaN(date.getTime())) return undefined;
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(date);
+  } catch {
+    return undefined;
+  }
+}
+
 /** "Updated 21:18 IST" */
 export function formatUpdatedLine(isoTimestamp: string | undefined): string {
   return `Updated ${formatIST(isoTimestamp)}`;

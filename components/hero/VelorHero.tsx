@@ -12,10 +12,10 @@ interface VelorHeroProps {
 }
 
 const ENV_LABELS = [
-  { text: "SYSTEM / LIVE", top: "3%", right: "3%", bottom: undefined, left: undefined },
+  { text: "SYSTEM / SPORTS", top: "3%", right: "3%", bottom: undefined, left: undefined },
   { text: "DATA STREAM / 04", top: undefined, right: "3%", bottom: "3%", left: undefined },
   { text: "LATENCY / 42MS", top: undefined, right: undefined, bottom: "3%", left: "3%" },
-  { text: "SYNC / ACTIVE", top: "3%", right: undefined, bottom: undefined, left: "3%" },
+  { text: "SYNC / VELOR", top: "3%", right: undefined, bottom: undefined, left: "3%" },
 ];
 
 export default function VelorHero({ liveCount = 0, matchCount = 0, leagueCount = 0, teamCount = 0, syncedAt, degraded = false }: VelorHeroProps) {
@@ -81,8 +81,8 @@ export default function VelorHero({ liveCount = 0, matchCount = 0, leagueCount =
             <HeroActions />
 
             <div data-hero-live-indicator>
-              <div className="live-indicator mt-8">
-                <span>LIVE</span>
+              <div className="live-indicator mt-8" data-state={degraded ? "degraded" : "live"}>
+                <span>{degraded ? "DEGRADED" : "LIVE"}</span>
                 <span className="text-text-secondary normal-case tracking-normal text-xs">
                   SPORTS INTELLIGENCE
                 </span>

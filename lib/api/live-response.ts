@@ -17,6 +17,8 @@ export interface LiveMatchesPayload {
   matches: SportsSnapshot["liveMatches"];
   syncedAt: string;
   degraded: boolean;
+  /** True when payloads were served from the last-known-good fallback. */
+  upstreamStale: boolean;
   unavailableSports: SportsSnapshot["unavailableSports"];
   error?: string;
   message?: string;
@@ -35,6 +37,7 @@ export function buildLiveMatchesResponse(snapshot: SportsSnapshot): LiveMatchesR
         matches: [],
         syncedAt: snapshot.syncedAt,
         degraded: false,
+        upstreamStale: false,
         unavailableSports: snapshot.unavailableSports,
         error: "SPORTS_DATA_MISCONFIGURED",
         message: "Real API mode is requested but the API key is not configured on the server.",
@@ -49,6 +52,7 @@ export function buildLiveMatchesResponse(snapshot: SportsSnapshot): LiveMatchesR
         matches: [],
         syncedAt: snapshot.syncedAt,
         degraded: false,
+        upstreamStale: false,
         unavailableSports: snapshot.unavailableSports,
         error: "SPORTS_DATA_UNAVAILABLE",
         message: "Live match data could not be loaded from any sport.",
@@ -62,6 +66,7 @@ export function buildLiveMatchesResponse(snapshot: SportsSnapshot): LiveMatchesR
       matches: snapshot.liveMatches,
       syncedAt: snapshot.syncedAt,
       degraded: snapshot.degraded,
+      upstreamStale: snapshot.upstreamStale,
       unavailableSports: snapshot.unavailableSports,
     },
   };

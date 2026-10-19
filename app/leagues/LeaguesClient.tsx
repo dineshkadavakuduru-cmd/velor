@@ -6,12 +6,14 @@ import LiveHeader from "@/components/live/LiveHeader";
 import LeagueCard from "@/components/ui/LeagueCard";
 import EmptyState from "@/components/ui/EmptyState";
 import DataFreshness from "@/components/ui/DataFreshness";
+import DegradedBanner from "@/components/ui/DegradedBanner";
 import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 
 interface LeaguesClientProps {
   initialLeagues: League[];
   syncedAt: string;
   degraded?: boolean;
+  upstreamStale?: boolean;
   unavailableSports?: { id: string; name: string; errorKind?: string }[];
 }
 
@@ -19,6 +21,7 @@ export default function LeaguesClient({
   initialLeagues,
   syncedAt,
   degraded = false,
+  upstreamStale = false,
   unavailableSports = [],
 }: LeaguesClientProps) {
   const [search, setSearch] = useState("");
@@ -59,7 +62,14 @@ export default function LeaguesClient({
         countLabel="LEAGUES"
       />
       <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30 flex flex-col gap-1">
-        <DataFreshness syncedAt={syncedAt} degraded={degraded} />
+        <DataFreshness syncedAt={syncedAt} degraded={degraded} staleUpstream={upstreamStale} />
+        {(degraded || upstreamStale) && (
+          <DegradedBanner
+            degraded={degraded}
+            upstreamStale={upstreamStale}
+            unavailableSports={unavailableSports.map((s) => s.name)}
+          />
+        )}
         {unavailableSports.length > 0 && (
           <UnavailableSportsNote sports={unavailableSports} />
         )}

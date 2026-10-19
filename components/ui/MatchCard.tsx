@@ -3,6 +3,7 @@ import { getMatchIntelligence } from "@/lib/utils/derivedMetrics";
 import LeagueBadge from "@/components/live/LeagueBadge";
 import TeamDisplay from "@/components/live/TeamDisplay";
 import ScoreDisplay from "@/components/live/ScoreDisplay";
+import MatchTime from "@/components/ui/MatchTime";
 import StatusBadge from "./StatusBadge";
 import Link from "next/link";
 
@@ -62,12 +63,7 @@ export default function MatchCard({ match, href, showVenue = true }: MatchCardPr
           <div className="mt-2 text-[0.65rem] text-text-secondary font-mono tracking-wide">
             {match.venue}
             {match.startTime && !isLive && (
-              <span className="ml-2 text-text-secondary/60">
-                {new Date(match.startTime).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
+              <MatchTime iso={match.startTime} className="ml-2 text-text-secondary/60" />
             )}
           </div>
         )}

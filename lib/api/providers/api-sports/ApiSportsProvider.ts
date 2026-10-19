@@ -2,6 +2,7 @@ import type { SportsProvider, GetMatchesParams, Match, League, Team, Player, Sta
 import type { Sport } from "@/lib/types/sports";
 import { normalizeMatchStatus, normalizeScore } from "./normalize";
 import { buildSportsApiError, SportsApiError } from "@/lib/api/error";
+import { fetchWithLastGood } from "@/lib/api/last-good";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 const PROVIDER_NAME = "ApiSportsProvider";
@@ -131,39 +132,88 @@ function normalizeMatch(fixture: ApiSportsFixture): Match {
   };
 }
 
+type ApiSportsErrors = string[] | Record<string, string> | null | undefined;
+
+function hasApiSportsErrors(errors: ApiSportsErrors): boolean {
+  if (!errors) return false;
+  if (Array.isArray(errors)) return errors.length > 0;
+  return Object.keys(errors).length > 0;
+}
+
+function isQuotaErrorText(errors: ApiSportsErrors): boolean {
+  if (!hasApiSportsErrors(errors)) return false;
+  const texts: string[] =
+    Array.isArray(errors)
+      ? errors
+      : Object.values(errors as Record<string, string>);
+  return texts.some((t) =>
+    /quota|rate|limit|plan|package|subscription|exceed/i.test(t)
+  );
+}
+
+/**
+ * Stale-while-error aware upstream fetch:
+ *  - success records the payload in the last-good store (empty arrays are
+ *    never recorded when a previous good payload exists — an error page or
+ *    an all-provider outage must not bake "empty world" data),
+ *  - failure falls back to the last-known-good payload when it exists and
+ *    is fresh enough, and marks the response stale for honest UI messaging.
+ */
 async function apiFetch<T>(url: string, apiKey: string, revalidate?: number): Promise<T> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  return fetchWithLastGood<T>({
+    provider: PROVIDER_NAME,
+    endpoint: url,
+    run: async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  try {
-    const res = await fetch(url, {
-      headers: { "x-apisports-key": apiKey },
-      next: revalidate !== undefined ? { revalidate } : undefined,
-      signal: controller.signal,
-    });
+      try {
+        const res = await fetch(url, {
+          headers: { "x-apisports-key": apiKey },
+          next: revalidate !== undefined ? { revalidate } : undefined,
+          signal: controller.signal,
+        });
 
-    if (res.status === 429) {
-      throw new Error("RATE_LIMIT");
-    }
+        if (res.status === 429) {
+          throw new Error("RATE_LIMIT");
+        }
 
-    if (res.status === 401 || res.status === 403) {
-      throw new Error("AUTH_FAILURE");
-    }
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("AUTH_FAILURE");
+        }
 
-    if (!res.ok) {
-      throw new Error(`API_ERROR:${res.status}`);
-    }
+        if (!res.ok) {
+          throw new Error(`API_ERROR:${res.status}`);
+        }
 
-    try {
-      return (await res.json()) as T;
-    } catch {
-      throw new Error("MALFORMED_RESPONSE");
-    }
-  } catch (error) {
-    throw buildSportsApiError(PROVIDER_NAME, url, error);
-  } finally {
-    clearTimeout(timeoutId);
-  }
+        try {
+          const data = (await res.json()) as { errors?: ApiSportsErrors } & T;
+          // API-Sports can answer HTTP 200 with a body carrying `errors`
+          // (quota exhausted, plan limits, …) and an empty `response`.
+          // That is a failure, not "no matches today" — treat it as one so
+          // the last-good fallback and the degraded dataset kick in.
+          if (hasApiSportsErrors(data.errors)) {
+            throw new Error(
+              isQuotaErrorText(data.errors) ? "RATE_LIMIT" : "API_ERROR:200"
+            );
+          }
+          return data as T;
+        } catch (parseError) {
+          if (parseError instanceof Error && parseError.message.startsWith("API_ERROR")) {
+            throw parseError;
+          }
+          if (parseError instanceof Error && parseError.message === "RATE_LIMIT") {
+            throw parseError;
+          }
+          throw new Error("MALFORMED_RESPONSE");
+        }
+      } catch (error) {
+        throw buildSportsApiError(PROVIDER_NAME, url, error);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    },
+  });
 }
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {

@@ -6,12 +6,14 @@ import LiveHeader from "@/components/live/LiveHeader";
 import TeamCard from "@/components/ui/TeamCard";
 import EmptyState from "@/components/ui/EmptyState";
 import DataFreshness from "@/components/ui/DataFreshness";
+import DegradedBanner from "@/components/ui/DegradedBanner";
 import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 
 interface TeamsClientProps {
   initialTeams: Team[];
   syncedAt: string;
   degraded?: boolean;
+  upstreamStale?: boolean;
   unavailableSports?: { id: string; name: string; errorKind?: string }[];
   teamsDerivedFromMatches?: boolean;
 }
@@ -20,6 +22,7 @@ export default function TeamsClient({
   initialTeams,
   syncedAt,
   degraded = false,
+  upstreamStale = false,
   unavailableSports = [],
   teamsDerivedFromMatches = false,
 }: TeamsClientProps) {
@@ -62,7 +65,14 @@ export default function TeamsClient({
         countLabel="TEAMS"
       />
       <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30 flex flex-col gap-1">
-        <DataFreshness syncedAt={syncedAt} degraded={degraded} />
+        <DataFreshness syncedAt={syncedAt} degraded={degraded} staleUpstream={upstreamStale} />
+        {(degraded || upstreamStale) && (
+          <DegradedBanner
+            degraded={degraded}
+            upstreamStale={upstreamStale}
+            unavailableSports={unavailableSports.map((s) => s.name)}
+          />
+        )}
         {teamsDerivedFromMatches && teams.length > 0 && (
           <p className="text-[0.65rem] text-text-secondary font-mono tracking-widest uppercase">
             Team directory derived from today&apos;s fixtures — full directory unavailable.

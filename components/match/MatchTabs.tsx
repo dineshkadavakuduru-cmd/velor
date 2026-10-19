@@ -112,7 +112,7 @@ export default function MatchTabs({ match, stats, events, lineups }: MatchTabsPr
       </div>
 
       <TabPanel tabId="overview" active={activeTab}>
-        <OverviewTab match={match} stats={stats} events={events} lineups={lineups} />
+        <OverviewTab match={match} events={events} />
       </TabPanel>
 
       <TabPanel tabId="stats" active={activeTab} available={hasStats}>
@@ -163,7 +163,7 @@ function TabPanel({ tabId, active, available, children }: { tabId: TabId; active
   );
 }
 
-function OverviewTab({ match, stats, events, lineups }: { match: Match; stats: MatchStatistics[]; events: MatchEvent[]; lineups: MatchLineup[] }) {
+function OverviewTab({ match, events }: { match: Match; events: MatchEvent[] }) {
   const intel = getMatchIntelligence(match);
 
   return (
