@@ -2,9 +2,11 @@ import type { SportsProvider, GetMatchesParams, Match, League, Team, Player, Sta
 import { normalizeCricketMatch, normalizeCricketLeague, normalizeCricketTeam } from "./normalize";
 import { buildSportsApiError, SportsApiError } from "@/lib/api/error";
 import { fetchWithLastGood } from "@/lib/api/last-good";
+import { isForeignSport } from "../sportsapipro/normalize";
 
 const BASE_URL = "https://v2.cricket.sportsapipro.com";
 const PROVIDER_NAME = "CricketProvider";
+const SPORT_SLUG = "cricket";
 
 function api(path: string): string {
   return `${BASE_URL}/api${path.startsWith("/") ? path : `/${path}`}`;
@@ -272,6 +274,9 @@ export class CricketProvider implements SportsProvider {
     const data = await withRetry<unknown>(() => cricketApiFetch<CricketMatchDetail | { event?: CricketMatchDetail; data?: CricketMatchDetail }>(url, this.apiKey, 60));
     const matchData = extractSingle<CricketMatchDetail>(data);
     if (!matchData) return null;
+    // The by-id route is a cross-sport gateway: never accept another sport's
+    // match as cricket.
+    if (isForeignSport(matchData, SPORT_SLUG)) return null;
     return normalizeCricketMatch(matchData);
   }
 
@@ -305,6 +310,7 @@ export class CricketProvider implements SportsProvider {
     const data = await withRetry<unknown>(() => cricketApiFetch<{ data?: CricketLeagueInfo }>(url, this.apiKey, 86400));
     const leagueData = extractSingle<CricketLeagueInfo>(data);
     if (!leagueData) return null;
+    if (isForeignSport(leagueData, SPORT_SLUG)) return null;
     return normalizeCricketLeague(leagueData);
   }
 
@@ -328,6 +334,7 @@ export class CricketProvider implements SportsProvider {
     const data = await withRetry<{ data?: CricketTeamInfo }>(() => cricketApiFetch(url, this.apiKey, 86400));
     const teamData = extractSingle<CricketTeamInfo>(data);
     if (!teamData) return null;
+    if (isForeignSport(teamData, SPORT_SLUG)) return null;
     return normalizeCricketTeam(teamData);
   }
 

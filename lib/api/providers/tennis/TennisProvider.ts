@@ -2,9 +2,11 @@ import type { SportsProvider, GetMatchesParams, Match, League, Team, Player, Sta
 import { normalizeTennisMatch, normalizeTennisLeague, normalizeTennisTeam } from "./normalize";
 import { buildSportsApiError, SportsApiError } from "@/lib/api/error";
 import { fetchWithLastGood } from "@/lib/api/last-good";
+import { isForeignSport } from "../sportsapipro/normalize";
 
 const BASE_URL = "https://v2.tennis.sportsapipro.com";
 const PROVIDER_NAME = "TennisProvider";
+const SPORT_SLUG = "tennis";
 
 function api(path: string): string {
   return `${BASE_URL}/api${path.startsWith("/") ? path : `/${path}`}`;
@@ -303,6 +305,9 @@ export class TennisProvider implements SportsProvider {
     const data = await withRetry<unknown>(() => tennisApiFetch<TennisMatchDetail | { data?: TennisMatchDetail }>(url, this.apiKey, 60));
     const matchData = extractSingle<TennisMatchDetail>(data);
     if (!matchData) return null;
+    // The by-id route is a cross-sport gateway: never accept another sport's
+    // match as tennis.
+    if (isForeignSport(matchData, SPORT_SLUG)) return null;
     return normalizeTennisMatch(matchData);
   }
 
@@ -338,6 +343,7 @@ export class TennisProvider implements SportsProvider {
     const data = await withRetry<{ data?: TennisLeagueInfo }>(() => tennisApiFetch(url, this.apiKey, 86400));
     const leagueData = extractSingle<TennisLeagueInfo>(data);
     if (!leagueData) return null;
+    if (isForeignSport(leagueData, SPORT_SLUG)) return null;
     return normalizeTennisLeague(leagueData);
   }
 
@@ -361,6 +367,7 @@ export class TennisProvider implements SportsProvider {
     const data = await withRetry<{ data?: TennisTeamInfo }>(() => tennisApiFetch(url, this.apiKey, 86400));
     const teamData = extractSingle<TennisTeamInfo>(data);
     if (!teamData) return null;
+    if (isForeignSport(teamData, SPORT_SLUG)) return null;
     return normalizeTennisTeam(teamData);
   }
 

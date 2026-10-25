@@ -8,9 +8,9 @@ import { ApiSportsProvider } from "./ApiSportsProvider";
 const apiKey = process.env.VELOR_API_SPORTS_KEY;
 
 if (!apiKey) {
-  // Skipping API-Sports smoke test: VELOR_API_SPORTS_KEY is not set.
+  // Skipping football smoke test: VELOR_API_SPORTS_KEY is not set.
 } else {
-  describe("ApiSportsProvider smoke test", () => {
+  describe("ApiSportsProvider smoke test (API-Sports Pro)", () => {
     const provider = new ApiSportsProvider(apiKey);
 
     it("returns live matches", async () => {
@@ -18,9 +18,14 @@ if (!apiKey) {
       assert.ok(Array.isArray(matches));
     });
 
-    it("returns matches for a date", async () => {
-      const matches = await provider.getMatches({ date: "2026-08-22" });
+    it("returns matches", async () => {
+      const matches = await provider.getMatches();
       assert.ok(Array.isArray(matches));
+    });
+
+    it("returns leagues", async () => {
+      const leagues = await provider.getLeagues();
+      assert.ok(Array.isArray(leagues));
     });
 
     it("returns null for an invalid match id", async () => {
@@ -28,22 +33,19 @@ if (!apiKey) {
       assert.strictEqual(match, null);
     });
 
-    it("normalizes a match into domain model", async () => {
-      const matches = await provider.getMatches({ date: "2026-08-22" });
+    it("normalizes a match into the domain model", async () => {
+      const matches = await provider.getMatches();
       if (matches.length > 0) {
         const m = matches[0];
         assert.ok(typeof m.id === "string");
         assert.ok(typeof m.status === "string");
         assert.ok(
-          ["scheduled", "live", "halftime", "finished", "postponed", "cancelled"].includes(
-            m.status
-          )
+          ["scheduled", "live", "halftime", "finished", "postponed", "cancelled"].includes(m.status)
         );
+        assert.strictEqual(m.sport.id, "football");
         assert.ok(typeof m.homeTeam.name === "string");
         assert.ok(typeof m.awayTeam.name === "string");
       }
     });
   });
 }
-
-

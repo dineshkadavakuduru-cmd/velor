@@ -1,5 +1,60 @@
 # Changelog
 
+## 2026-10-25 — Football & basketball feeds restored (API-Sports Pro migration)
+
+### Root cause
+
+`https://velor-omega.vercel.app/` reported "UNAVAILABLE: FOOTBALL · BASKETBALL"
+while cricket/tennis served data. Football used `v3.football.api-sports.io` and
+basketball `v1.basketball.api-sports.io`; cricket/tennis had already moved to
+`*.sportsapipro.com`. The legacy `api-sports.io` hosts are retired and now
+answer **HTTP 403 for every request** (verified: root path, data routes, and
+requests with no auth header all 403), so both providers failed
+`AUTH_FAILURE` and the sports were reported unavailable.
+
+### Fix
+
+- **Migrated football and basketball to API-Sports Pro** —
+  `v2.football.sportsapipro.com` / `v2.basketball.sportsapipro.com`, the same
+  platform cricket/tennis use (auth `x-api-key`, `/api/...` routes).
+- **Shared platform provider** — new `lib/api/providers/sportsapipro/`
+  (`client.ts`, `normalize.ts`, `types.ts`, `provider.ts`). `SportsApiProProvider`
+  owns the platform logic; `ApiSportsProvider` (football) and
+  `BasketballProvider` are thin config bindings, so the two sports cannot drift.
+  Removed the per-sport `normalize.ts` files and their obsolete tests.
+- **Cross-sport gateway guard** — list routes are sport-scoped by subdomain,
+  but by-id routes (`/match/<id>`, `/team/<id>`, `/tournament/<id>/info`) and
+  `/search` resolve ids from **any** sport. Every by-id lookup now rejects an
+  entity that positively belongs to a different sport (`isForeignSport`), so a
+  football lookup can no longer return a tennis match. Applied to cricket and
+  tennis too (lenient: an entity that states no sport is still accepted).
+- Live matches are read from `/today` (rich, id-complete) rather than the flat
+  `/live` feed, which omits team ids and would create unaddressable team links.
+
+### Honesty / states preserved
+
+- No invented scores: a `429` (shared account quota) is classified `RATE_LIMIT`
+  and the sport is reported unavailable, or served from last-known-good data
+  when available — VELOR never substitutes sample data.
+- Verified states: with one sport healthy the existing DegradedBanner shows
+  "UNAVAILABLE: …" plus a data timestamp; with every sport failing the page
+  renders "SPORTS DATA UNAVAILABLE" with zero counts and a truthful sync time.
+- `withRetry` now reads `SportsApiError.meta` so auth/rate-limit/malformed and
+  4xx failures are not retried (previously the wrapped message hid them, and
+  4xx/429 were retried three times).
+
+### Verification
+
+- Live provider probe (`scripts/verify-live.mts`): football PASS — 33 live,
+  293 fixtures today, `getMatch`, 22 leagues, team search. Basketball/cricket/
+  tennis returned `RATE_LIMIT` in the same run (shared key quota exhausted by
+  probing) — the honest unavailable path.
+- `vercel`-style production build exit 0; eslint 0/0; `tsc --noEmit` clean;
+  suite **384 tests, 0 failures** (obsolete API-sports.io assertions replaced by
+  shared platform tests covering matches, live filtering, cross-sport guards,
+  404s, last-known-good, statistics/events/lineups and standings).
+
+
 ## 2026-10-19 — Data-layer hardening: stale-while-error, honest states, global padding fix, CI gates
 
 ### Data layer
