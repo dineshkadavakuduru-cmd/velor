@@ -14,10 +14,22 @@ import EntityImage from "@/components/ui/EntityImage";
 
 type Status = "idle" | "loading" | "results" | "empty" | "error";
 
+/** Search targets, in display order. */
+const TYPE_LABELS: Record<string, string> = {
+  sport: "SPORTS",
+  team: "TEAMS",
+  player: "PLAYERS",
+  league: "LEAGUES",
+  match: "MATCHES",
+};
+
+const SEARCH_SCOPE = "teams, players, leagues, matches, and sports";
+
 export default function SearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [unavailableSports, setUnavailableSports] = useState<{ id: string; name: string }[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -27,6 +39,7 @@ export default function SearchPage() {
     const trimmed = validateSearchQuery(q);
     if (!trimmed) {
       setResults([]);
+      setUnavailableSports([]);
       setStatus("idle");
       setSelectedIndex(-1);
       return;
@@ -41,11 +54,15 @@ export default function SearchPage() {
         throw new Error("SEARCH_FAILED");
       }
       const data = await res.json();
-      const filteredResults = data.results ?? [];
-      setResults(filteredResults);
-      setStatus(filteredResults.length > 0 ? "results" : "empty");
+      const nextResults: SearchResult[] = Array.isArray(data.results) ? data.results : [];
+      setResults(nextResults);
+      // Providers that could not be searched are reported by the API; saying
+      // only "no results" would imply the sport has no such entity at all.
+      setUnavailableSports(Array.isArray(data.unavailableSports) ? data.unavailableSports : []);
+      setStatus(nextResults.length > 0 ? "results" : "empty");
     } catch {
       setResults([]);
+      setUnavailableSports([]);
       setStatus("error");
     }
   }, []);
@@ -84,6 +101,7 @@ export default function SearchPage() {
     } else if (e.key === "Escape") {
       setQuery("");
       setResults([]);
+      setUnavailableSports([]);
       setStatus("idle");
       setSelectedIndex(-1);
       inputRef.current?.focus();
@@ -91,20 +109,17 @@ export default function SearchPage() {
   }, [results, selectedIndex, router]);
 
   const groupedResults = useMemo(() => {
-    const groups: Record<string, SearchResult[]> = { team: [], league: [], match: [] };
+    const groups: Record<string, SearchResult[]> = { sport: [], team: [], player: [], league: [], match: [] };
     for (const result of results) {
-      if (groups[result.type]) {
-        groups[result.type].push(result);
-      }
+      groups[result.type] = groups[result.type] ?? [];
+      groups[result.type].push(result);
     }
     return groups;
   }, [results]);
 
-  const typeLabels: Record<string, string> = { team: "TEAMS", league: "LEAGUES", match: "MATCHES" };
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <LiveHeader title="SEARCH" subtitle="Search teams, leagues, and matches." showLiveIndicator={false} />
+      <LiveHeader title="SEARCH" subtitle={`Search ${SEARCH_SCOPE}.`} showLiveIndicator={false} />
       <div className="px-4 sm:px-6 lg:px-10 py-4 border-b border-border-subtle bg-surface-1/30">
         <div className="max-w-2xl">
           <label htmlFor="global-search" className="technical-label block mb-1.5">
@@ -119,7 +134,7 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search teams, leagues, matches..."
+              placeholder="Search teams, players, leagues, matches, sports..."
               autoFocus
               className="w-full h-10 pl-9 pr-9 bg-surface-2 border border-border-default text-text-primary text-sm focus:outline-none focus:border-live transition-colors placeholder:text-text-secondary/60"
               aria-autocomplete="list"
@@ -129,7 +144,7 @@ export default function SearchPage() {
             {query && (
               <button
                 type="button"
-                onClick={() => { setQuery(""); setResults([]); setStatus("idle"); setSelectedIndex(-1); inputRef.current?.focus(); }}
+                onClick={() => { setQuery(""); setResults([]); setUnavailableSports([]); setStatus("idle"); setSelectedIndex(-1); inputRef.current?.focus(); }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
                 aria-label="Clear search"
               >
@@ -148,7 +163,7 @@ export default function SearchPage() {
         {status === "idle" && (
           <EmptyState
             title="START SEARCHING"
-            description="Type at least 2 characters to search across teams, leagues, and matches."
+            description={`Type at least 2 characters to search across ${SEARCH_SCOPE}.`}
           />
         )}
 
@@ -163,19 +178,31 @@ export default function SearchPage() {
         )}
 
         {status === "empty" && (
-          <EmptyState
-            title="NO RESULTS"
-            description={`No results found for "${query}". Try a different search term.`}
-          />
+          <>
+            <EmptyState
+              title="NO RESULTS"
+              description={`No results found for "${query.trim()}". Searched ${SEARCH_SCOPE}. Try a different term.`}
+            />
+            {unavailableSports.length > 0 && (
+              <p className="text-[0.65rem] text-gold font-mono tracking-widest uppercase" role="status">
+                Partial search · live data unavailable: {unavailableSports.map((s) => s.name).join(" · ")}
+              </p>
+            )}
+          </>
         )}
 
         {status === "results" && (
           <div id="search-results" className="max-w-2xl space-y-6" role="listbox">
+            {unavailableSports.length > 0 && (
+              <p className="text-[0.65rem] text-gold font-mono tracking-widest uppercase" role="status">
+                Partial search · live data unavailable: {unavailableSports.map((s) => s.name).join(" · ")}
+              </p>
+            )}
             {Object.entries(groupedResults).map(([type, typeResults]) => {
               if (typeResults.length === 0) return null;
               return (
                 <div key={type} className="space-y-1">
-                  <span className="technical-label block mb-2">{typeLabels[type] ?? type.toUpperCase()}</span>
+                  <span className="technical-label block mb-2">{TYPE_LABELS[type] ?? type.toUpperCase()}</span>
                   {typeResults.map((result) => {
                     const globalIndex = results.indexOf(result);
                     return (

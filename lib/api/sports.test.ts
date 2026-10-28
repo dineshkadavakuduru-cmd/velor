@@ -6,6 +6,7 @@ import {
   isSportEnabled,
   getEnabledSports,
   getSportDisplayName,
+  matchSports,
 } from "./sports";
 
 describe("sport registry", () => {
@@ -69,5 +70,42 @@ describe("sport registry", () => {
     assert.strictEqual(getSportDisplayName("football"), "Football");
     assert.strictEqual(getSportDisplayName("basketball"), "Basketball");
     assert.strictEqual(getSportDisplayName("unknown"), "unknown");
+  });
+});
+
+describe("sport search targets", () => {
+  it("matches a full sport name", () => {
+    assert.deepStrictEqual(
+      matchSports("tennis").map((sport) => sport.id),
+      ["tennis"]
+    );
+  });
+
+  it("matches sport ids and short names", () => {
+    assert.deepStrictEqual(
+      matchSports("basketball").map((sport) => sport.id),
+      ["basketball"]
+    );
+    assert.deepStrictEqual(
+      matchSports("CRI").map((sport) => sport.id),
+      ["cricket"]
+    );
+  });
+
+  it("never returns disabled sports (no promise of missing data)", () => {
+    assert.deepStrictEqual(matchSports("hockey"), []);
+    assert.deepStrictEqual(matchSports("baseball"), []);
+  });
+
+  it("ignores queries shorter than two characters", () => {
+    assert.deepStrictEqual(matchSports("t"), []);
+    assert.deepStrictEqual(matchSports("  "), []);
+  });
+
+  it("returns only the enabled sports a broad query matches", () => {
+    assert.deepStrictEqual(
+      matchSports("ball").map((sport) => sport.id),
+      ["football", "basketball"]
+    );
   });
 });

@@ -88,7 +88,7 @@ export interface PlayerMatchStats {
   stats: Record<string, number | string>;
 }
 
-export type SearchResultType = "team" | "league" | "match" | "player";
+export type SearchResultType = "sport" | "team" | "league" | "match" | "player";
 
 export interface SearchResult {
   type: SearchResultType;

@@ -1,13 +1,15 @@
 import type { League, Match, Team } from "@/lib/types/sports";
 import type { GetMatchesParams } from "@/lib/api/types";
-import { SportsApiError } from "@/lib/api/error";
+import { classifyError } from "./availability";
+import type { SportSyncState } from "./availability";
+
+export { classifyError };
+export type { SportSyncState };
 
 /**
  * Pure derivation helpers for the canonical sports snapshot.
  * Kept free of React/Next imports so they can be unit-tested in isolation.
  */
-
-export type SportSyncState = "ok" | "unavailable" | "misconfigured";
 
 export interface PerSportSync {
   sportId: string;
@@ -71,33 +73,6 @@ export interface SportFetchInput {
    * The data is usable but NOT current — the UI must say so.
    */
   servedUpstreamStale?: boolean;
-}
-
-export function classifyError(error: unknown): { state: SportSyncState; errorKind?: string } {
-  if (error instanceof SportsApiError) {
-    return { state: "unavailable", errorKind: error.meta.kind };
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("VELOR_API_SPORTS_KEY")) {
-    return { state: "misconfigured" };
-  }
-  if (message.includes("RATE_LIMIT")) {
-    return { state: "unavailable", errorKind: "RATE_LIMIT" };
-  }
-  if (message.includes("AUTH_FAILURE")) {
-    return { state: "unavailable", errorKind: "AUTH_FAILURE" };
-  }
-  if (message.includes("TIMEOUT")) {
-    return { state: "unavailable", errorKind: "TIMEOUT" };
-  }
-  if (message.includes("MALFORMED_RESPONSE")) {
-    return { state: "unavailable", errorKind: "MALFORMED_RESPONSE" };
-  }
-  const apiError = message.match(/API_ERROR:(\d+)/);
-  if (apiError) {
-    return { state: "unavailable", errorKind: `API_ERROR_${apiError[1]}` };
-  }
-  return { state: "unavailable", errorKind: "UNKNOWN" };
 }
 
 export function emptySnapshot(reason: "misconfigured" | "unavailable", syncedAt: string): SportsSnapshot {

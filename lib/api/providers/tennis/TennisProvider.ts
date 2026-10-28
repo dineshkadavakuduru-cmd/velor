@@ -434,6 +434,7 @@ export class TennisProvider implements SportsProvider {
     const data = await withRetry<TennisSearchResponse>(() => tennisApiFetch(url, this.apiKey, 60));
     const results: SearchResult[] = [];
     const limit = params.limit ?? 10;
+    const sportLabel = "Tennis";
 
     if (data?.events && Array.isArray(data.events)) {
       for (const event of data.events) {
@@ -442,7 +443,7 @@ export class TennisProvider implements SportsProvider {
           type: "match",
           id: String(event.id),
           name: `${event.homeTeam.name} vs ${event.awayTeam.name}`,
-          subtitle: event.tournament?.name,
+          subtitle: `${sportLabel} · ${event.tournament?.name ?? "Match"}`,
           href: `/match/${event.id}`,
         });
       }
@@ -457,7 +458,7 @@ export class TennisProvider implements SportsProvider {
             type: "team",
             id: String(team.id),
             name: team.name,
-            subtitle: team.country?.name,
+            subtitle: `${sportLabel} · ${team.country?.name ?? "Player"}`,
             href: `/team/${team.id}`,
           });
           addedTeamIds.add(String(team.id));
@@ -475,7 +476,7 @@ export class TennisProvider implements SportsProvider {
             type: "league",
             id: tid,
             name: tournament.name,
-            subtitle: tournament.country?.name,
+            subtitle: `${sportLabel} · ${tournament.country?.name ?? "Tournament"}`,
             href: `/league/${tid}`,
           });
           addedTournamentIds.add(tid);

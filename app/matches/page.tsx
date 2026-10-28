@@ -1,7 +1,10 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { getSportsSnapshot, isLiveMatch } from "@/lib/api/snapshot";
+import type { SportsSnapshot } from "@/lib/api/snapshot";
 import type { Match } from "@/lib/types/sports";
 import { validateMatchFilters } from "@/lib/api/validate";
+import { getSportDisplayName } from "@/lib/api/sports";
 import LiveHeader from "@/components/live/LiveHeader";
 import MatchCard from "@/components/ui/MatchCard";
 import SectionHeader from "@/components/ui/SectionHeader";
@@ -44,6 +47,60 @@ function ProviderMisconfigured() {
   );
 }
 
+/**
+ * A sport-filtered view whose provider failed says exactly that. The generic
+ * "couldn't load — retry" state hides a credential/provisioning problem behind
+ * a transient-looking error, and retrying an auth rejection never helps.
+ */
+function SportUnavailable({
+  snapshot,
+  sportId,
+}: {
+  snapshot: SportsSnapshot;
+  sportId: string;
+}) {
+  const failure = snapshot.unavailableSports.find((sport) => sport.id === sportId);
+  const sportName = failure?.name ?? getSportDisplayName(sportId);
+  const errorKind = failure?.errorKind;
+  const retryable = errorKind !== "AUTH_FAILURE";
+  const cause =
+    errorKind === "AUTH_FAILURE"
+      ? " the provider rejected this server's API credentials for this sport"
+      : errorKind === "RATE_LIMIT"
+        ? " the provider rate limit was reached"
+        : errorKind === "TIMEOUT"
+          ? " the provider timed out"
+          : " the provider could not be reached";
+
+  return (
+    <>
+      <LiveHeader
+        title="MATCHES"
+        subtitle={`${sportName} schedule and results`}
+        showLiveIndicator={false}
+      />
+      <div className="px-4 sm:px-6 lg:px-10 py-2 border-b border-border-subtle bg-surface-1/30">
+        <DataFreshness syncedAt={snapshot.syncedAt} degraded />
+      </div>
+      <ErrorState
+        title={`${sportName.toUpperCase()} LIVE DATA UNAVAILABLE`}
+        description={`Live ${sportName} data is unavailable because${cause}${
+          errorKind ? ` (${errorKind})` : ""
+        }. No scores are shown rather than stale or estimated values.`}
+        showRetry={retryable}
+      />
+      <div className="px-4 sm:px-6 lg:px-10 py-4">
+        <Link
+          href="/sports"
+          className="font-mono text-xs tracking-widest text-text-secondary hover:text-live transition-colors"
+        >
+          ← SPORTS COVERAGE
+        </Link>
+      </div>
+    </>
+  );
+}
+
 export default function MatchesPage({ searchParams }: MatchesPageProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -82,6 +139,11 @@ async function MatchesContent({ searchParams }: MatchesPageProps) {
   }
 
   if (!snapshot.hasAnySuccess) {
+    // The user asked for one sport and that sport's provider failed — report
+    // that sport's availability instead of a generic full-page load error.
+    if (filters.sport) {
+      return <SportUnavailable snapshot={snapshot} sportId={filters.sport} />;
+    }
     return <ProviderUnavailable />;
   }
 

@@ -1,14 +1,31 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, Clock, Users, Trophy, Calendar, User } from "lucide-react";
+import { Search, X, Clock, Users, Trophy, Calendar, User, Globe } from "lucide-react";
+import { getEnabledSports } from "@/lib/api/sports";
+import { MIN_SEARCH_QUERY_LENGTH } from "@/lib/api/search-response";
 import type { SearchResult } from "@/lib/types/sports";
 
 const RECENT_QUERIES_KEY = "velor_recent_searches";
 const MAX_RECENT = 5;
+const SEARCH_DEBOUNCE_MS = 250;
+
+/** Targets /api/search actually resolves — stated in the palette so the
+ * search scope is never a guess. */
+const SEARCH_TARGETS = ["teams", "players", "leagues", "matches", "sports"];
+const COVERED_SPORTS = getEnabledSports().map((sport) => sport.name);
+
+type SearchStatus = "idle" | "searching" | "results" | "empty" | "error";
+
+interface SearchUnavailableSource {
+  id: string;
+  name: string;
+  errorKind?: string;
+}
 
 const iconMap: Record<SearchResult["type"], React.ComponentType<{ className?: string }>> = {
+  sport: Globe,
   team: Users,
   league: Trophy,
   match: Calendar,
@@ -31,19 +48,30 @@ export default function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [status, setStatus] = useState<SearchStatus>("idle");
+  const [unavailableSports, setUnavailableSports] = useState<SearchUnavailableSource[]>([]);
   // Read the stored queries once at mount instead of via an effect: the
   // palette renders only its trigger button until it is opened on the
   // client, so this cannot desync server and client markup, and it avoids
   // the extra cascading render an effect would cause.
   const [recentQueries, setRecentQueries] = useState<string[]>(readRecentQueries);
-  const [isSearching, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Monotonic request id: a slow response for "ten" must never overwrite the
+  // results for "tennis".
+  const requestRef = useRef(0);
+
+  const resetSearch = useCallback(() => {
+    requestRef.current += 1;
+    setResults([]);
+    setUnavailableSports([]);
+    setStatus("idle");
+  }, []);
 
   const closePalette = useCallback(() => {
     setOpen(false);
     setQuery("");
-    setResults([]);
-  }, []);
+    resetSearch();
+  }, [resetSearch]);
 
   useEffect(() => {
     if (open) {
@@ -66,6 +94,65 @@ export default function CommandPalette() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closePalette]);
 
+  const performSearch = useCallback(async (searchTerm: string) => {
+    const requestId = ++requestRef.current;
+    setStatus("searching");
+
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(searchTerm)}`);
+
+      if (requestId !== requestRef.current) return;
+
+      if (!res.ok) {
+        setResults([]);
+        setUnavailableSports([]);
+        setStatus("error");
+        return;
+      }
+
+      const data = await res.json();
+      if (requestId !== requestRef.current) return;
+
+      const nextResults: SearchResult[] = Array.isArray(data.results) ? data.results : [];
+      setResults(nextResults);
+      setUnavailableSports(Array.isArray(data.unavailableSports) ? data.unavailableSports : []);
+      setStatus(nextResults.length > 0 ? "results" : "empty");
+    } catch {
+      if (requestId !== requestRef.current) return;
+      setResults([]);
+      setUnavailableSports([]);
+      setStatus("error");
+    }
+  }, []);
+
+  // Typing updates the input state; a short query immediately clears any
+  // previous results (and cancels in-flight requests) so stale hits can never
+  // be shown for a new query.
+  const applyQuery = useCallback(
+    (value: string) => {
+      setQuery(value);
+      if (value.trim().length < MIN_SEARCH_QUERY_LENGTH) {
+        resetSearch();
+      } else {
+        setStatus("searching");
+      }
+    },
+    [resetSearch]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    const trimmed = query.trim();
+    if (trimmed.length < MIN_SEARCH_QUERY_LENGTH) return;
+
+    const timer = setTimeout(() => {
+      void performSearch(trimmed);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [query, open, performSearch]);
+
   const saveRecentQuery = useCallback((q: string) => {
     const stored = q.trim();
     if (!stored) return;
@@ -76,35 +163,6 @@ export default function CommandPalette() {
     });
   }, []);
 
-  const performSearch = useCallback(async (searchTerm: string) => {
-    if (!searchTerm.trim()) {
-      setResults([]);
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchTerm)}`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data.results ?? []);
-        }
-      } catch {
-        setResults([]);
-      }
-    });
-  }, []);
-
-  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setQuery(value);
-    performSearch(value);
-  }, [performSearch]);
-
   const handleSelect = (result: SearchResult) => {
     saveRecentQuery(result.name);
     router.push(result.href);
@@ -112,9 +170,12 @@ export default function CommandPalette() {
   };
 
   const handleRecentClick = (q: string) => {
-    setQuery(q);
-    performSearch(q);
+    applyQuery(q);
   };
+
+  const trimmedQuery = query.trim();
+  const isTooShort = trimmedQuery.length > 0 && trimmedQuery.length < MIN_SEARCH_QUERY_LENGTH;
+  const isActiveSearch = trimmedQuery.length >= MIN_SEARCH_QUERY_LENGTH;
 
   return (
     <>
@@ -148,15 +209,21 @@ export default function CommandPalette() {
                 <input
                   ref={inputRef}
                   type="text"
-                  placeholder="Search teams, leagues, matches..."
+                  placeholder="Search teams, players, leagues, matches, sports..."
                   value={query}
-                  onChange={handleSearch}
+                  onChange={(e) => applyQuery(e.target.value)}
                   className="w-full text-lg focus:outline-none bg-transparent text-text-primary placeholder-text-secondary font-mono"
                 />
+                <p
+                  className="mt-1.5 text-[0.6rem] font-mono tracking-widest text-text-secondary/70 uppercase truncate"
+                  title={`Scope: ${SEARCH_TARGETS.join(", ")} · ${COVERED_SPORTS.join(", ")}`}
+                >
+                  SCOPE · {SEARCH_TARGETS.join(" · ")} · {COVERED_SPORTS.join(" · ")}
+                </p>
               </div>
 
               <div className="max-h-[400px] overflow-y-auto">
-                {query.trim().length === 0 && recentQueries.length > 0 && (
+                {trimmedQuery.length === 0 && recentQueries.length > 0 && (
                   <div className="pb-2">
                     <div className="px-4 py-1.5 text-xs font-mono text-text-secondary tracking-widest">
                       RECENT SEARCHES
@@ -174,9 +241,30 @@ export default function CommandPalette() {
                   </div>
                 )}
 
-                {query.trim().length > 0 && results.length === 0 && !isSearching && (
+                {isTooShort && (
                   <div className="px-4 py-3 font-mono text-xs text-text-secondary">
-                    NO RESULTS FOUND
+                    KEEP TYPING — AT LEAST {MIN_SEARCH_QUERY_LENGTH} CHARACTERS
+                  </div>
+                )}
+
+                {isActiveSearch && status === "searching" && (
+                  <div className="px-4 py-3 font-mono text-xs text-text-secondary" role="status">
+                    SEARCHING…
+                  </div>
+                )}
+
+                {isActiveSearch && status === "error" && (
+                  <div className="px-4 py-3 font-mono text-xs text-gold" role="alert">
+                    SEARCH UNAVAILABLE — PLEASE TRY AGAIN
+                  </div>
+                )}
+
+                {isActiveSearch && status === "empty" && (
+                  <div className="px-4 py-3 font-mono text-xs text-text-secondary">
+                    NO RESULTS FOR “{trimmedQuery}”
+                    <span className="block text-text-secondary/70 mt-1">
+                      Searched {SEARCH_TARGETS.join(", ")}.
+                    </span>
                   </div>
                 )}
 
@@ -217,6 +305,15 @@ export default function CommandPalette() {
                   </div>
                 )}
               </div>
+
+              {isActiveSearch && unavailableSports.length > 0 && (
+                <div className="px-4 py-2 border-t border-border-subtle bg-gold/5" role="status">
+                  <p className="text-[0.6rem] font-mono tracking-widest text-gold uppercase">
+                    Partial search · live data unavailable:{" "}
+                    {unavailableSports.map((sport) => sport.name).join(" · ")}
+                  </p>
+                </div>
+              )}
 
               <div className="px-4 py-2 border-t border-border-subtle flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-mono text-text-secondary">

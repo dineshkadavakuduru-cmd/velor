@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { createRegistry } from "@/lib/api";
 import { getEnabledSports } from "@/lib/api/sports";
-import type { SearchResult } from "@/lib/types/sports";
 import { validateSearchQuery } from "@/lib/api/validate";
+import {
+  buildSearchPayload,
+  type SearchSourceOutcome,
+} from "@/lib/api/search-response";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -16,53 +19,53 @@ export async function GET(request: Request) {
     const query = validateSearchQuery(url.searchParams.get("q") ?? "");
 
     if (!query) {
-      clearTimeout(timeout);
-      return NextResponse.json({ query: "", results: [], total: 0 });
+      return NextResponse.json(buildSearchPayload("", []));
     }
 
     const registry = createRegistry();
     const enabledSports = getEnabledSports();
-    const searchPromises = enabledSports.map((sport) =>
-      registry.getProvider(sport.id).search({ query, limit: 15 })
-    );
 
-    const settledResults = await Promise.race([
-      Promise.allSettled(searchPromises),
+    const settled = await Promise.race([
+      Promise.allSettled(
+        enabledSports.map((sport) => registry.getProvider(sport.id).search({ query, limit: 15 }))
+      ),
       new Promise<never>((_, reject) => {
         controller.signal.addEventListener("abort", () => reject(new Error("SEARCH_TIMEOUT")));
       }),
     ]);
 
-    const allResults: SearchResult[] = [];
-    const seen = new Set<string>();
-
-    for (const r of settledResults) {
-      if (r.status === "fulfilled") {
-        for (const item of r.value) {
-          const key = `${item.type}:${item.id}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            allResults.push(item);
+    // A failing provider must not blank the whole palette: report which sports
+    // could not be searched alongside whatever the other providers returned.
+    const outcomes: SearchSourceOutcome[] = settled.map((result, index) => {
+      const sport = enabledSports[index];
+      return result.status === "fulfilled"
+        ? {
+            sportId: sport.id,
+            sportName: sport.name,
+            status: "fulfilled",
+            results: result.value,
           }
-        }
-      }
-    }
-
-    const q = query.toLowerCase();
-    const filtered = allResults.filter((r) => {
-      return (
-        r.name.toLowerCase().includes(q) ||
-        r.subtitle?.toLowerCase().includes(q)
-      );
+        : {
+            sportId: sport.id,
+            sportName: sport.name,
+            status: "rejected",
+            reason: result.reason,
+          };
     });
 
-    clearTimeout(timeout);
-    return NextResponse.json({ query, results: filtered, total: filtered.length });
+    return NextResponse.json(buildSearchPayload(query, outcomes));
   } catch {
-    clearTimeout(timeout);
     return NextResponse.json(
-      { results: [], total: 0 },
+      {
+        query: "",
+        results: [],
+        total: 0,
+        unavailableSports: [],
+        error: "SEARCH_UNAVAILABLE",
+      },
       { status: 500 }
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }

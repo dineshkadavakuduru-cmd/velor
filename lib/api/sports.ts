@@ -82,3 +82,23 @@ export function getEnabledSports(): SportDefinition[] {
 export function getSportDisplayName(id: string): string {
   return SPORTS[id]?.name ?? id;
 }
+
+/**
+ * Sports whose name/id matches a search query.
+ *
+ * Search targets entities (teams, players, leagues, matches) but a bare sport
+ * name is still a meaningful query — the user wants that sport's coverage.
+ * Only enabled sports are returned: linking to a disabled sport would promise
+ * data VELOR does not have.
+ */
+export function matchSports(query: string): SportDefinition[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  return Object.values(SPORTS).filter(
+    (sport) =>
+      sport.enabled &&
+      (sport.id.toLowerCase().includes(q) ||
+        sport.name.toLowerCase().includes(q) ||
+        sport.shortName.toLowerCase() === q)
+  );
+}

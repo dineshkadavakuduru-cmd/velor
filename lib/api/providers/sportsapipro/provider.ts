@@ -348,6 +348,7 @@ export class SportsApiProProvider implements SportsProvider {
     const entities = await this.searchEntities(query);
     const limit = params.limit ?? 10;
     const results: SearchResult[] = [];
+    const sportLabel = this.config.sportName;
 
     for (const result of entities) {
       if (results.length >= limit) break;
@@ -358,7 +359,7 @@ export class SportsApiProProvider implements SportsProvider {
           type: "team",
           id: String(entity.id),
           name: entity.name ?? "Unknown",
-          subtitle: optional(entity.country?.name),
+          subtitle: `${sportLabel} · ${optional(entity.country?.name)}`,
           href: `/team/${entity.id}`,
         });
       } else if (result.type === "player") {
@@ -366,7 +367,7 @@ export class SportsApiProProvider implements SportsProvider {
           type: "player",
           id: String(entity.id),
           name: entity.name ?? "Unknown",
-          subtitle: optional(entity.country?.name),
+          subtitle: `${sportLabel} · ${optional(entity.country?.name)}`,
           href: `/player/${entity.id}`,
         });
       }

@@ -156,6 +156,7 @@ export class MockSportsProvider implements SportsProvider {
 
     for (const match of mockLiveMatches) {
       if (results.length >= limit) break;
+      const sportName = match.sport.name;
       if (
         match.homeTeam.name.toLowerCase().includes(q) ||
         match.awayTeam.name.toLowerCase().includes(q)
@@ -164,7 +165,7 @@ export class MockSportsProvider implements SportsProvider {
           type: "match",
           id: match.id,
           name: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
-          subtitle: match.league.name,
+          subtitle: `${sportName} · ${match.league.name}`,
           href: `/match/${match.id}`,
         });
       }
@@ -174,12 +175,13 @@ export class MockSportsProvider implements SportsProvider {
     for (const match of mockLiveMatches) {
       for (const team of [match.homeTeam, match.awayTeam]) {
         if (results.length >= limit) break;
+        const sportName = match.sport.name;
         if (team.name.toLowerCase().includes(q) && !addedTeamIds.has(team.id)) {
           results.push({
             type: "team",
             id: team.id,
             name: team.name,
-            subtitle: team.country,
+            subtitle: `${sportName} · ${team.country}`,
             href: `/team/${team.id}`,
             logo: team.logo,
           });
@@ -191,12 +193,13 @@ export class MockSportsProvider implements SportsProvider {
     const addedLeagueIds = new Set<string>();
     for (const match of mockLiveMatches) {
       if (results.length >= limit) break;
+      const sportName = match.sport.name;
       if (match.league.name.toLowerCase().includes(q) && !addedLeagueIds.has(match.league.id)) {
         results.push({
           type: "league",
           id: match.league.id,
           name: match.league.name,
-          subtitle: match.league.country,
+          subtitle: `${sportName} · ${match.league.country}`,
           href: `/league/${match.league.id}`,
           logo: match.league.logo,
         });
@@ -212,7 +215,7 @@ export class MockSportsProvider implements SportsProvider {
           type: "player",
           id: player.id,
           name: player.name,
-          subtitle: player.teamId,
+          subtitle: `${player.sportId?.toUpperCase() ?? "Sport"} · ${player.teamId ?? "Player"}`,
           href: `/player/${player.id}`,
         });
         addedPlayerIds.add(player.id);
