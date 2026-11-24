@@ -177,6 +177,17 @@ describe("SportsApiProProvider", () => {
   });
 
   describe("search", () => {
+    it("deduplicates before applying the limit and labels distinct Belgium squads", async () => {
+      const men = { id: 4717, name: "Belgium", gender: "M", national: true, country: { name: "Belgium" }, sport: { slug: "football" } };
+      const women = { ...men, id: 38081, gender: "F" };
+      handler = () => json({ data: { results: [men, men, women].map((entity) => ({ type: "team", entity })) } });
+      const results = await provider.search({ query: "Belgium", limit: 2 });
+      assert.deepStrictEqual(results.map(({ id, subtitle }) => [id, subtitle]), [
+        ["4717", "Football · Men’s national team · Belgium"],
+        ["38081", "Football · Women’s national team · Belgium"],
+      ]);
+    });
+
     it("maps team and player results and drops foreign sports", async () => {
       handler = () => json({
         success: true,
@@ -190,7 +201,7 @@ describe("SportsApiProProvider", () => {
       });
       const results = await provider.search({ query: "arsenal" });
       assert.deepStrictEqual(results.map((r) => r.id), ["42", "804508"]);
-      assert.strictEqual(results[0].href, "/team/42");
+      assert.strictEqual(results[0].href, "/team/42?sport=football");
       assert.strictEqual(results[1].type, "player");
     });
   });

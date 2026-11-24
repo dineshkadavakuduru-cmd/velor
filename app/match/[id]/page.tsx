@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { createRegistry } from "@/lib/api";
-import { findMatch } from "@/lib/api/lookup";
-import type { Match, MatchEvent, MatchStatistics, MatchLineup } from "@/lib/types/sports";
-import { validateMatchId } from "@/lib/api/validate";
+import { getMatchDetailSource } from "@/lib/api/match-detail-source";
+import { getFirstValue, validateMatchId } from "@/lib/api/validate";
 import MatchDetail from "@/components/match/MatchDetail";
 import LiveHeader from "@/components/live/LiveHeader";
 import ErrorState from "@/components/ui/ErrorState";
+import DataFreshness from "@/components/ui/DataFreshness";
+import LivePageRefresh from "@/components/live/LivePageRefresh";
+import { isLiveMatch } from "@/lib/api/snapshot-helpers";
 
 interface MatchDetailPageProps {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ sport?: string | string[] | undefined }>;
 }
 
-export async function generateMetadata({ params }: MatchDetailPageProps): Promise<{ title: string; description: string }> {
+export async function generateMetadata({ params, searchParams }: MatchDetailPageProps): Promise<{ title: string; description: string }> {
   const { id } = await params;
   const validId = validateMatchId(id);
 
@@ -21,14 +22,13 @@ export async function generateMetadata({ params }: MatchDetailPageProps): Promis
   }
 
   try {
-    const registry = createRegistry();
-    const result = await findMatch(registry, validId);
+    const result = await getMatchDetailSource(validId, getFirstValue((await searchParams)?.sport));
     if (!result) {
       return { title: "Match Not Found — VELOR", description: "Match not found." };
     }
     return {
-        title: `${result.entity.homeTeam.name} vs ${result.entity.awayTeam.name} — VELOR`,
-        description: `Match details for ${result.entity.homeTeam.name} vs ${result.entity.awayTeam.name} in ${result.entity.league.name}.`,
+        title: `${result.match.homeTeam.name} vs ${result.match.awayTeam.name} — VELOR`,
+        description: `Match details for ${result.match.homeTeam.name} vs ${result.match.awayTeam.name} in ${result.match.league.name}.`,
     };
   } catch {
     return { title: "Match Detail — VELOR", description: "Match details and live scores." };
@@ -85,72 +85,40 @@ export default async function MatchDetailPage({ params, searchParams }: MatchDet
     return <MatchNotFound />;
   }
 
-  let match: Match | null = null;
-  let events: MatchEvent[] = [];
-  let stats: MatchStatistics[] = [];
-  let lineups: MatchLineup[] = [];
-  let providerResult: Awaited<ReturnType<typeof findMatch>> = null;
-  let hasError = false;
-  let misconfigured = false;
-  let notFound = false;
-
+  let source;
   try {
-    const registry = createRegistry();
-    const sportParam = searchParams ? (await searchParams).sport : undefined;
-    const sportId = Array.isArray(sportParam) ? sportParam[0] : sportParam;
-    providerResult = await findMatch(registry, validId, sportId);
-    if (!providerResult) throw new Error("MATCH_NOT_FOUND");
-    const provider = providerResult.provider;
-    const [matchResult, eventsResult, statsResult, lineupsResult] = await Promise.all([
-      provider.getMatch(validId),
-      provider.getMatchEvents({ matchId: validId }),
-      provider.getMatchStatistics({ matchId: validId }),
-      provider.getMatchLineups({ matchId: validId }),
-    ]);
-    match = matchResult;
-    events = eventsResult;
-    stats = statsResult;
-    lineups = lineupsResult;
+    source = await getMatchDetailSource(validId, getFirstValue((await searchParams)?.sport));
   } catch (error) {
-    notFound = error instanceof Error && error.message === "MATCH_NOT_FOUND";
-    hasError = !notFound;
     if (error instanceof Error && error.message.includes("VELOR_API_SPORTS_KEY")) {
-      misconfigured = true;
+      return <ProviderMisconfigured />;
     }
-  }
-
-  if (misconfigured) {
-    return <ProviderMisconfigured />;
-  }
-
-  if (notFound) {
-    return <MatchNotFound />;
-  }
-
-  if (hasError) {
     return <ProviderUnavailable />;
   }
+  if (!source) return <MatchNotFound />;
 
-  if (!match) {
-    return <MatchNotFound />;
-  }
-
+  const { match, provider, syncedAt, stale, degraded } = source;
+  const [events, stats, lineups] = await Promise.allSettled([
+    provider.getMatchEvents({ matchId: validId }),
+    provider.getMatchStatistics({ matchId: validId }),
+    provider.getMatchLineups({ matchId: validId }),
+  ]);
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <MatchDetailContent match={match} events={events} stats={stats} lineups={lineups} />
-    </div>
-  );
-}
-
-function MatchDetailContent({ match, events, stats, lineups }: { match: Match; events: MatchEvent[]; stats: MatchStatistics[]; lineups: MatchLineup[] }) {
-  return (
-    <>
+      {(isLiveMatch(match) || (syncedAt && (match.status === "scheduled" || stale || degraded))) && <LivePageRefresh />}
       <LiveHeader
         title="MATCH DETAIL"
         subtitle={`${match.homeTeam.name} vs ${match.awayTeam.name}`}
         showLiveIndicator={false}
       />
-      <MatchDetail match={match} stats={stats} events={events} lineups={lineups} />
+      {(syncedAt || stale) && (
+        <DataFreshness syncedAt={syncedAt} degraded={degraded} staleUpstream={stale} className="px-4 sm:px-6 lg:px-10 pt-3" />
+      )}
+      <MatchDetail
+        match={match}
+        events={events.status === "fulfilled" ? events.value : []}
+        stats={stats.status === "fulfilled" ? stats.value : []}
+        lineups={lineups.status === "fulfilled" ? lineups.value : []}
+      />
       <div className="px-4 sm:px-6 lg:px-10 py-4 border-t border-border-subtle">
         <Link
           href="/matches"
@@ -160,6 +128,6 @@ function MatchDetailContent({ match, events, stats, lineups }: { match: Match; e
           BACK TO MATCHES
         </Link>
       </div>
-    </>
+    </div>
   );
 }

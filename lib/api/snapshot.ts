@@ -46,14 +46,8 @@ export type {
  */
 export const getSportsSnapshot = cache(
   async (filters?: GetMatchesParams): Promise<SportsSnapshot> => {
-    // Request-time rendering only: this snapshot must NEVER be baked into a
-    // build-time prerender or served as a stale static generation. Every
-    // page (/live, /matches, /teams, …) renders the current assembly over
-    // shared Data-Cache upstream payloads, so pages cannot disagree.
-    // (Upstream fetch revalidation windows still apply — this only defers
-    // rendering to request time; it does not bypass the fetch cache.)
+    // Request-time assembly over shared provider samples.
     await connection();
-    const syncedAt = new Date().toISOString();
 
     let registry: ReturnType<typeof createRegistry>;
     try {
@@ -62,7 +56,7 @@ export const getSportsSnapshot = cache(
       const classified = classifyError(error);
       const snapshot = emptySnapshot(
         classified.state === "misconfigured" ? "misconfigured" : "unavailable",
-        syncedAt
+        new Date().toISOString()
       );
       return snapshot;
     }
@@ -77,7 +71,7 @@ export const getSportsSnapshot = cache(
     // rather than leaking another sport's data into the filtered view.
     if (filters?.sport != null && sports.length === 0) {
       return {
-        ...emptySnapshot("unavailable", syncedAt),
+        ...emptySnapshot("unavailable", new Date().toISOString()),
         perSport: [],
       };
     }
@@ -85,25 +79,19 @@ export const getSportsSnapshot = cache(
     const results = await Promise.allSettled(
       sports.map(async (sport) => {
         const provider = registry.getProvider(sport.id);
-        // Request-local stale collector: any endpoint served from the
-        // last-known-good fallback during this sport's fetches is recorded
-        // here and propagated to the snapshot/UI, so a degraded upstream can
-        // never render silently as "fresh".
-        const staleSet = new Set<string>();
-        // Union of the live endpoint AND the general fixtures endpoint.
-        // Some providers only return data from one of them (e.g. football's
-        // general fixtures endpoint needs date/league params while
-        // ?live=all works unauthenticated-param-free). The union — deduped
-        // by match id — is the canonical dataset every page derives from,
-        // so no page can disagree about live counts again.
-        const settled = await runWithStaleCollection(staleSet, () =>
-          Promise.allSettled([
-            provider.getLiveMatches(),
-            provider.getMatches(filters),
-            provider.getLeagues(),
-            provider.getTeams(),
-          ])
-        );
+        // Track freshness for scores separately from reference data, so a
+        // stale team or league response cannot label a current score stale.
+        const liveStale = new Set<string>();
+        const fixturesStale = new Set<string>();
+        const observations = new Map<string, number>();
+        // Some sports expose live games and scheduled/finished fixtures on
+        // separate endpoints. Assembly resolves both into one match record.
+        const settled = await Promise.allSettled([
+          runWithStaleCollection(liveStale, () => provider.getLiveMatches(), observations),
+          runWithStaleCollection(fixturesStale, () => provider.getMatches(filters), observations),
+          provider.getLeagues(),
+          provider.getTeams(),
+        ]);
         const [liveResult, fixturesResult, leaguesResult, teamsResult] = settled;
         const input: SportFetchInput = {
           sportId: sport.id,
@@ -112,7 +100,12 @@ export const getSportsSnapshot = cache(
           fixturesResult,
           leaguesResult,
           teamsResult,
-          servedUpstreamStale: staleSet.size > 0,
+          servedUpstreamStale: liveStale.size > 0 || fixturesStale.size > 0,
+          liveStale: liveStale.size > 0,
+          fixturesStale: fixturesStale.size > 0,
+          syncedAt: observations.size
+            ? new Date(Math.min(...observations.values())).toISOString()
+            : undefined,
         };
         return input;
       })
@@ -133,6 +126,8 @@ export const getSportsSnapshot = cache(
       };
     });
 
+    const syncedAt = inputs.flatMap((input) => input.syncedAt ? [input.syncedAt] : []).sort()[0]
+      ?? new Date().toISOString();
     return assembleSnapshot(inputs, filters, syncedAt);
   }
 );

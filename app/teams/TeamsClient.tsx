@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import type { Team } from "@/lib/types/sports";
 import LiveHeader from "@/components/live/LiveHeader";
 import TeamCard from "@/components/ui/TeamCard";
+import { entityHref } from "@/lib/utils/entityIdentity";
 import EmptyState from "@/components/ui/EmptyState";
 import DataFreshness from "@/components/ui/DataFreshness";
 import DegradedBanner from "@/components/ui/DegradedBanner";
@@ -164,6 +165,6 @@ function SportChip({ label, active, onClick }: { label: string; active: boolean;
 
 function TeamCardWrapper({ team }: { team: Team }) {
   return (
-    <TeamCard team={team} href={`/team/${team.id}`} />
+    <TeamCard team={team} href={entityHref("team", team.id, team.sportId)} />
   );
 }

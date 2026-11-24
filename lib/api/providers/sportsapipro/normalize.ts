@@ -110,11 +110,17 @@ export function normalizeSportsApiProTeam(
   }
   const name = safeString(team.name) ?? "Unknown";
   const primary = safeString(team.teamColors?.primary);
+  const gender = team.gender === "M" ? "Men’s" : team.gender === "F" ? "Women’s" : undefined;
+  const ageGroup = /\bU\d{2}\b/i.exec(name)?.[0].toUpperCase();
+  const squadCategory = [gender, ageGroup, team.national === true ? "national team" : "team"]
+    .filter(Boolean).join(" ");
   return {
     id: team.id != null ? String(team.id) : "",
     name,
     shortName: shortNameOf(name, team.shortName, team.nameCode),
-    country: safeString(team.country?.name),
+    country: safeString(team.country?.name) ?? safeString(team.category?.name),
+    squadCategory: gender || ageGroup || team.national === true ? squadCategory : undefined,
+    competition: safeString(team.primaryUniqueTournament?.name),
     colors: primary ? { primary, secondary: safeString(team.teamColors?.secondary) } : undefined,
     sportId,
   };

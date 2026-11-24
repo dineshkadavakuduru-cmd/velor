@@ -4,6 +4,7 @@ import { buildLiveMatchesResponse } from "@/lib/api/live-response";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
+const LIVE_HEADERS = { "Cache-Control": "no-store" };
 
 /**
  * Live-matches polling endpoint. Returns the SAME canonical live dataset as
@@ -16,30 +17,26 @@ export const maxDuration = 15;
  *   500 — misconfigured server (missing API key in real-API mode)
  */
 export async function GET() {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-
   try {
     const snapshot = await getSportsSnapshot();
-    clearTimeout(timeout);
 
     // Status codes and counts come from the pure, unit-tested contract in
     // lib/api/live-response.ts: 200 data (possibly degraded), 503 no sport
     // reachable, 500 misconfigured.
     const { status, body } = buildLiveMatchesResponse(snapshot);
-    return NextResponse.json(body, { status });
+    return NextResponse.json(body, { status, headers: LIVE_HEADERS });
   } catch {
-    clearTimeout(timeout);
     return NextResponse.json(
       {
         matches: [],
         syncedAt: new Date().toISOString(),
         degraded: false,
+        upstreamStale: false,
         unavailableSports: [],
         error: "SPORTS_DATA_UNAVAILABLE",
         message: "Live match data could not be loaded.",
       },
-      { status: 503 }
+      { status: 503, headers: LIVE_HEADERS }
     );
   }
 }

@@ -1,7 +1,8 @@
 import type { SportsProvider, GetMatchesParams, Match, League, Team, Player, Standing, MatchEvent, MatchStatistics, MatchLineup, SearchResult, GetMatchEventsParams, GetMatchStatisticsParams, GetMatchLineupsParams, SearchParams } from "../../types";
 import { normalizeTennisMatch, normalizeTennisLeague, normalizeTennisTeam } from "./normalize";
-import { buildSportsApiError, SportsApiError } from "@/lib/api/error";
-import { fetchWithLastGood } from "@/lib/api/last-good";
+import { buildSportsApiError, SportsApiError } from "../../error";
+import { fetchWithLastGood, LIVE_CACHE_SECONDS } from "../../last-good";
+import { entityHref } from "../../../utils/entityIdentity";
 import { isForeignSport } from "../sportsapipro/normalize";
 
 const BASE_URL = "https://v2.tennis.sportsapipro.com";
@@ -164,9 +165,11 @@ interface TennisPointByPointResponse {
 }
 
 async function tennisApiFetch<T>(url: string, apiKey: string, revalidate?: number): Promise<T> {
+  const liveFeed = url === api("/live") || url === api("/today");
   return fetchWithLastGood<T>({
     provider: PROVIDER_NAME,
     endpoint: url,
+    freshForMs: liveFeed ? LIVE_CACHE_SECONDS * 1000 : undefined,
     run: async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -174,8 +177,8 @@ async function tennisApiFetch<T>(url: string, apiKey: string, revalidate?: numbe
       try {
         const res = await fetch(url, {
           headers: { "x-api-key": apiKey },
-          cache: revalidate === 0 ? "no-store" : undefined,
-          next: revalidate !== undefined && revalidate > 0 ? { revalidate } : undefined,
+          cache: liveFeed || revalidate === 0 ? "no-store" : undefined,
+          next: !liveFeed && revalidate !== undefined && revalidate > 0 ? { revalidate } : undefined,
           signal: controller.signal,
         });
 
@@ -437,14 +440,19 @@ export class TennisProvider implements SportsProvider {
     const sportLabel = "Tennis";
 
     if (data?.events && Array.isArray(data.events)) {
+      const addedMatchIds = new Set<string>();
       for (const event of data.events) {
         if (results.length >= limit) break;
+        const id = String(event.id);
+        if (addedMatchIds.has(id)) continue;
+        addedMatchIds.add(id);
         results.push({
           type: "match",
-          id: String(event.id),
+          id,
+          sportId: SPORT_SLUG,
           name: `${event.homeTeam.name} vs ${event.awayTeam.name}`,
           subtitle: `${sportLabel} · ${event.tournament?.name ?? "Match"}`,
-          href: `/match/${event.id}`,
+          href: entityHref("match", id, SPORT_SLUG),
         });
       }
     }
@@ -457,9 +465,10 @@ export class TennisProvider implements SportsProvider {
           results.push({
             type: "team",
             id: String(team.id),
+            sportId: SPORT_SLUG,
             name: team.name,
             subtitle: `${sportLabel} · ${team.country?.name ?? "Player"}`,
-            href: `/team/${team.id}`,
+            href: entityHref("team", String(team.id), SPORT_SLUG),
           });
           addedTeamIds.add(String(team.id));
         }

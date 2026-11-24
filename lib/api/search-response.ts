@@ -85,12 +85,28 @@ export function buildSearchPayload(query: string, outcomes: SearchSourceOutcome[
   for (const outcome of outcomes) {
     if (outcome.status !== "fulfilled" || !outcome.results) continue;
     for (const item of outcome.results) {
-      const key = `${item.type}:${item.id}`;
+      const key = `${item.type}:${item.sportId ?? ""}:${item.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
       results.push(item);
     }
   }
 
-  return { query: trimmed, results, total: results.length, unavailableSports };
+  // Some providers omit squad metadata. Keep the identity visible when the
+  // available sport, squad and region labels still cannot separate teams.
+  const labels = new Map<string, number>();
+  for (const team of results.filter((item) => item.type === "team")) {
+    const label = teamLabelKey(team);
+    labels.set(label, (labels.get(label) ?? 0) + 1);
+  }
+  const labeledResults = results.map((item) =>
+    item.type === "team" && (labels.get(teamLabelKey(item)) ?? 0) > 1
+      ? { ...item, subtitle: [item.subtitle, `Team ID ${item.id}`].filter(Boolean).join(" · ") }
+      : item
+  );
+  return { query: trimmed, results: labeledResults, total: results.length, unavailableSports };
+}
+
+function teamLabelKey(team: SearchResult) {
+  return JSON.stringify([team.name.trim().toLowerCase(), team.subtitle?.trim().toLowerCase()]);
 }

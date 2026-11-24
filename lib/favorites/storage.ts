@@ -68,20 +68,18 @@ export function saveFavorites(store: FavoritesStore): void {
   }
 }
 
-function getCompositeKey(item: FavoriteItem): string {
-  const sportId = item.sportId ?? "all";
-  return `${item.type}:${sportId}:${item.id}`;
-}
+type FavoriteIdentity = Pick<FavoriteItem, "type" | "id" | "sportId"> & { name?: string };
 
-function hasItem(items: FavoriteItem[], item: FavoriteItem): boolean {
-  const targetKey = getCompositeKey(item);
-  return items.some((existing) => getCompositeKey(existing) === targetKey);
+function matchesFavorite(existing: FavoriteItem, item: FavoriteIdentity): boolean {
+  if (existing.type !== item.type || existing.id !== item.id) return false;
+  if (existing.sportId === item.sportId) return true;
+  // Team bookmarks saved before sport scoping still work on the team page.
+  return item.type === "team" && !existing.sportId && !!item.sportId && existing.name === item.name;
 }
 
 function toggleItem(items: FavoriteItem[], item: FavoriteItem): FavoriteItem[] {
-  if (hasItem(items, item)) {
-    const targetKey = getCompositeKey(item);
-    return items.filter((existing) => getCompositeKey(existing) !== targetKey);
+  if (items.some((existing) => matchesFavorite(existing, item))) {
+    return items.filter((existing) => !matchesFavorite(existing, item));
   }
   return [...items, item];
 }
@@ -107,12 +105,8 @@ export function toggleFavorite(store: FavoritesStore, item: FavoriteItem): Favor
 
 export function isFavorite(
   store: FavoritesStore,
-  item: Pick<FavoriteItem, "type" | "id" | "sportId">
+  item: FavoriteIdentity
 ): boolean {
   const list = store[item.type === "team" ? "teams" : item.type === "league" ? "leagues" : "matches"];
-  return list.some((existing) => {
-    const targetKey = `${existing.type}:${existing.sportId ?? "all"}:${existing.id}`;
-    const itemKey = `${item.type}:${item.sportId ?? "all"}:${item.id}`;
-    return targetKey === itemKey;
-  });
+  return list.some((existing) => matchesFavorite(existing, item));
 }

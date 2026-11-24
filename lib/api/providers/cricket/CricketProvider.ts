@@ -1,7 +1,8 @@
 import type { SportsProvider, GetMatchesParams, Match, League, Team, Player, Standing, MatchEvent, MatchStatistics, MatchLineup, SearchResult, GetMatchEventsParams, GetMatchStatisticsParams, GetMatchLineupsParams, SearchParams } from "../../types";
 import { normalizeCricketMatch, normalizeCricketLeague, normalizeCricketTeam } from "./normalize";
-import { buildSportsApiError, SportsApiError } from "@/lib/api/error";
-import { fetchWithLastGood } from "@/lib/api/last-good";
+import { buildSportsApiError, SportsApiError } from "../../error";
+import { fetchWithLastGood, LIVE_CACHE_SECONDS } from "../../last-good";
+import { entityHref } from "../../../utils/entityIdentity";
 import { isForeignSport } from "../sportsapipro/normalize";
 
 const BASE_URL = "https://v2.cricket.sportsapipro.com";
@@ -68,7 +69,7 @@ interface CricketTeamInfo {
 
 interface CricketSearchResponse {
   events?: Array<{ id: number; homeTeam: { id: number; name: string }; awayTeam: { id: number; name: string }; tournament?: { name: string; id: number | string } | null }>;
-  teams?: Array<{ id: number; name: string; sport?: { id: number; name: string } | null }>;
+  teams?: Array<{ id: number; name: string; country?: { id: number; name: string; alpha2: string } | null; sport?: { id: number; name: string } | null }>;
   tournaments?: Array<{ id: number; name: string; country?: { name: string } | null }>;
 }
 
@@ -122,9 +123,11 @@ function safeString(value: string | null | undefined): string | undefined {
 }
 
 async function cricketApiFetch<T>(url: string, apiKey: string, revalidate?: number): Promise<T> {
+  const liveFeed = url === api("/live") || url === api("/today");
   return fetchWithLastGood<T>({
     provider: PROVIDER_NAME,
     endpoint: url,
+    freshForMs: liveFeed ? LIVE_CACHE_SECONDS * 1000 : undefined,
     run: async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -132,7 +135,8 @@ async function cricketApiFetch<T>(url: string, apiKey: string, revalidate?: numb
       try {
         const res = await fetch(url, {
           headers: { "x-api-key": apiKey },
-          next: revalidate !== undefined ? { revalidate } : undefined,
+          cache: liveFeed ? "no-store" : undefined,
+          next: !liveFeed && revalidate !== undefined ? { revalidate } : undefined,
           signal: controller.signal,
         });
 
@@ -403,14 +407,19 @@ export class CricketProvider implements SportsProvider {
     const limit = params.limit ?? 10;
 
     if (data?.events && Array.isArray(data.events)) {
+      const addedMatchIds = new Set<string>();
       for (const event of data.events) {
         if (results.length >= limit) break;
+        const id = String(event.id);
+        if (addedMatchIds.has(id)) continue;
+        addedMatchIds.add(id);
         results.push({
           type: "match",
-          id: String(event.id),
+          id,
+          sportId: SPORT_SLUG,
           name: `${event.homeTeam.name} vs ${event.awayTeam.name}`,
           subtitle: event.tournament?.name,
-          href: `/match/${event.id}`,
+          href: entityHref("match", id, SPORT_SLUG),
         });
       }
     }
@@ -423,8 +432,10 @@ export class CricketProvider implements SportsProvider {
           results.push({
             type: "team",
             id: String(team.id),
+            sportId: SPORT_SLUG,
             name: team.name,
-            href: `/team/${team.id}`,
+            subtitle: ["Cricket", team.country?.name].filter(Boolean).join(" · "),
+            href: entityHref("team", String(team.id), SPORT_SLUG),
           });
           addedTeamIds.add(String(team.id));
         }

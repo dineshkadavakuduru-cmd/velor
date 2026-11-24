@@ -1,5 +1,5 @@
 import { buildSportsApiError, SportsApiError } from "../../error";
-import { fetchWithLastGood } from "../../last-good";
+import { fetchWithLastGood, LIVE_CACHE_SECONDS } from "../../last-good";
 import type { SportsApiProEvent, SportsApiProSearchResult } from "./types";
 
 const REQUEST_TIMEOUT_MS = 10000;
@@ -35,14 +35,15 @@ export async function sportsApiProFetch<T>(
   return fetchWithLastGood<T>({
     provider: options.providerName,
     endpoint: url,
+    freshForMs: path === "/today" ? LIVE_CACHE_SECONDS * 1000 : undefined,
     run: async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
         const res = await fetch(url, {
           headers: { "x-api-key": apiKey },
-          cache: revalidate === 0 ? "no-store" : undefined,
-          next: revalidate !== undefined && revalidate > 0 ? { revalidate } : undefined,
+          cache: path === "/today" || revalidate === 0 ? "no-store" : undefined,
+          next: path !== "/today" && revalidate !== undefined && revalidate > 0 ? { revalidate } : undefined,
           signal: controller.signal,
         });
 

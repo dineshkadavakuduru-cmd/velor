@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { getSportsSnapshot, rankFeaturedLeagues, rankFeaturedTeams } from "@/lib/api/snapshot";
-import type { Match } from "@/lib/types/sports";
 import IntroClient from "./IntroClient";
 import VelorHero from "../hero/VelorHero";
 import MatchCard from "../ui/MatchCard";
@@ -13,12 +12,15 @@ import DataFreshness from "@/components/ui/DataFreshness";
 import DegradedBanner from "@/components/ui/DegradedBanner";
 import UnavailableSportsNote from "@/components/ui/UnavailableSportsNote";
 import LiveTicker from "@/components/live/LiveTicker";
+import LivePageRefresh from "@/components/live/LivePageRefresh";
+import { entityHref } from "@/lib/utils/entityIdentity";
 import Link from "next/link";
 
 export default function VelorShell() {
   return (
     <IntroClient>
       <div className="min-h-screen flex flex-col bg-background">
+        <LivePageRefresh />
         <LiveTickerWrapper />
         <div className="flex-1 relative overflow-hidden">
           <Suspense
@@ -58,16 +60,13 @@ export default function VelorShell() {
 }
 
 async function LiveTickerWrapper() {
-  let matches: Match[] = [];
-
+  let snapshot;
   try {
-    const snapshot = await getSportsSnapshot();
-    matches = snapshot.liveMatches;
+    snapshot = await getSportsSnapshot();
   } catch {
-    // Silently fail - ticker just won't show
+    return null;
   }
-
-  return <LiveTicker matches={matches} />;
+  return <LiveTicker matches={snapshot.liveMatches} syncedAt={snapshot.syncedAt} degraded={snapshot.degraded} upstreamStale={snapshot.upstreamStale} />;
 }
 
 async function HeroContent() {
@@ -182,7 +181,7 @@ async function HomeSections() {
           />
           <div className="space-y-0" role="list">
             {liveMatches.slice(0, 5).map((match) => (
-              <MatchCard key={match.id} match={match} href={`/match/${match.id}`} />
+              <MatchCard key={match.id} match={match} href={entityHref("match", match.id, match.sport.id)} />
             ))}
           </div>
         </section>
@@ -197,7 +196,7 @@ async function HomeSections() {
           />
           <div className="space-y-0" role="list">
             {upcomingMatches.map((match) => (
-              <MatchCard key={match.id} match={match} href={`/match/${match.id}`} />
+              <MatchCard key={match.id} match={match} href={entityHref("match", match.id, match.sport.id)} />
             ))}
           </div>
         </section>
@@ -229,7 +228,7 @@ async function HomeSections() {
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {featuredTeams.map((team) => (
-              <TeamCard key={team.id} team={team} href={`/team/${team.id}`} />
+              <TeamCard key={team.id} team={team} href={entityHref("team", team.id, team.sportId)} />
             ))}
           </div>
         </section>

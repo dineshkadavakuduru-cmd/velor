@@ -97,6 +97,7 @@ export interface SearchResult {
   subtitle?: string;
   href: string;
   logo?: string;
+  sportId?: SportId;
 }
 
 export interface SearchResponse {
@@ -132,6 +133,8 @@ export interface Team {
   };
   venue?: string;
   country?: string;
+  squadCategory?: string;
+  competition?: string;
   sportId?: SportId;
 }
 

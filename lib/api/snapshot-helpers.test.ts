@@ -57,6 +57,25 @@ describe("isLiveMatch", () => {
   });
 });
 
+it("removes a finished fixture from the live feed even if the live endpoint still lists it", () => {
+  const league = makeLeague("l1", "International");
+  const home = makeTeam("h", "Belgium");
+  const away = makeTeam("a", "Italy");
+  const halftime = { ...makeMatch("1", "halftime", league, home, away), score: { home: 1, away: 0 } };
+  const finished = { ...halftime, status: "finished" as const, score: { home: 4, away: 1 } };
+  const ok = <T,>(value: T) => ({ status: "fulfilled" as const, value });
+  const input = { sportId: "football", sportName: "Football", leaguesResult: ok([]), teamsResult: ok([]) };
+  const syncedAt = "2026-08-22T21:45:00Z";
+
+  const during = assembleSnapshot([{ ...input, liveResult: ok([halftime]), fixturesResult: ok([halftime]) }], undefined, syncedAt);
+  assert.strictEqual(buildLiveMatchesResponse(during).body.matches[0], during.matches[0]);
+  assert.strictEqual(during.matches[0].status, "halftime");
+
+  const after = assembleSnapshot([{ ...input, liveResult: ok([halftime]), fixturesResult: ok([finished]) }], undefined, syncedAt);
+  assert.deepStrictEqual(buildLiveMatchesResponse(after).body.matches, []);
+  assert.strictEqual(after.matches[0], finished);
+});
+
 describe("shouldAcceptLivePayload", () => {
   it("accepts any payload when every provider succeeded", () => {
     assert.strictEqual(shouldAcceptLivePayload(25, 25, false), true);

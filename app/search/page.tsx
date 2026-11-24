@@ -207,7 +207,7 @@ export default function SearchPage() {
                     const globalIndex = results.indexOf(result);
                     return (
                       <SearchResultItem
-                        key={`${result.type}-${result.id}`}
+                        key={`${result.type}:${result.sportId ?? ""}:${result.id}`}
                         result={result}
                         isSelected={globalIndex === selectedIndex}
                         id={`search-result-${globalIndex}`}

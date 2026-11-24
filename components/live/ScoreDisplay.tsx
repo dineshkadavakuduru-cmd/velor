@@ -3,9 +3,10 @@ import type { Score } from "@/lib/types/sports";
 interface ScoreDisplayProps {
   score: Score;
   size?: "sm" | "md" | "lg";
+  showPeriodScores?: boolean;
 }
 
-export default function ScoreDisplay({ score, size = "md" }: ScoreDisplayProps) {
+export default function ScoreDisplay({ score, size = "md", showPeriodScores = true }: ScoreDisplayProps) {
   const sizeClasses = {
     sm: "text-sm",
     md: "text-lg sm:text-xl",
@@ -23,7 +24,7 @@ export default function ScoreDisplay({ score, size = "md" }: ScoreDisplayProps) 
           {score.away ?? "—"}
         </span>
       </div>
-      {score.periodScores && score.periodScores.length > 0 && (
+      {showPeriodScores && score.periodScores && score.periodScores.length > 0 && (
         <div className="flex gap-2 text-[0.65rem] text-text-secondary font-mono">
           {score.periodScores.map((ps) => (
             <span key={ps.period}>

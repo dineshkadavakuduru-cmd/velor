@@ -78,6 +78,20 @@ describe("buildSearchPayload", () => {
     assert.strictEqual(payload.total, 1);
   });
 
+  it("keeps different teams and distinguishes equal labels when squad metadata is unavailable", () => {
+    const first: SearchResult = { ...ENTITY, sportId: "football", name: "Belgium", subtitle: "Football · Belgium" };
+    const second: SearchResult = { ...first, id: "43" };
+    const otherSport: SearchResult = { ...first, sportId: "basketball", subtitle: "Basketball · Belgium" };
+    const payload = buildSearchPayload("belgium", [
+      fulfilled("football", "Football", [first, second]),
+      fulfilled("basketball", "Basketball", [first, otherSport]),
+    ]);
+    assert.deepStrictEqual(payload.results.map((result) => result.subtitle), [
+      "Football · Belgium · Team ID 42", "Football · Belgium · Team ID 43", "Basketball · Belgium",
+    ]);
+    assert.strictEqual(first.subtitle, "Football · Belgium");
+  });
+
   it("returns nothing for queries shorter than the minimum length", () => {
     const payload = buildSearchPayload("t", [
       rejected("football", "Football", new Error("AUTH_FAILURE")),

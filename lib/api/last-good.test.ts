@@ -14,6 +14,28 @@ beforeEach(() => {
 });
 
 describe("fetchWithLastGood", () => {
+  it("coalesces an expired score refresh and keeps the original sync time on failure", async () => {
+    const options = { provider: "Scores", endpoint: "/today", freshForMs: 60000 };
+    __setLastGoodForTest("Scores:/today", [0], Date.now() - 61000);
+    let calls = 0;
+    const run = async () => { calls++; return [1]; };
+    const observed = new Map<string, number>();
+    const request = () => runWithStaleCollection(new Set(), () => fetchWithLastGood({ ...options, run }), observed);
+    assert.deepStrictEqual(await Promise.all([request(), request(), request()]), [[1], [1], [1]]);
+    assert.equal(calls, 1);
+    assert.deepStrictEqual(await request(), [1]);
+    assert.equal(calls, 1);
+
+    const originalSync = observed.get("Scores:/today")! - 61000;
+    __setLastGoodForTest("Scores:/today", [1], originalSync);
+    const stale = new Set<string>();
+    const fallback = await runWithStaleCollection(stale, () =>
+      fetchWithLastGood({ ...options, run: async () => { throw new Error("Upstream unavailable"); } }), observed);
+    assert.deepStrictEqual(fallback, [1]);
+    assert.equal(stale.has("Scores:/today"), true);
+    assert.equal(observed.get("Scores:/today"), originalSync);
+  });
+
   it("records successful non-empty payloads", async () => {
     const data = await fetchWithLastGood<number[]>({
       provider: "TestProvider",

@@ -88,7 +88,7 @@ async function LiveMatches() {
 
   return (
     <LiveFeedClient
-      initialMatches={snapshot.matches}
+      initialMatches={snapshot.liveMatches}
       syncedAt={snapshot.syncedAt}
       degraded={snapshot.degraded}
       upstreamStale={snapshot.upstreamStale}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import EntityImage from "./EntityImage";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 import type { Team } from "@/lib/types/sports";
+import { teamSubtitle } from "@/lib/utils/entityIdentity";
 
 interface TeamCardProps {
   team: Team;
@@ -16,6 +17,8 @@ export default function TeamCard({ team, href, showCountry = true, showVenue = t
     type: "team" as const,
     name: team.name,
     logo: team.logo,
+    sportId: team.sportId,
+    subtitle: teamSubtitle(team),
   };
 
   const initials = team.shortName.slice(0, 3).toUpperCase();

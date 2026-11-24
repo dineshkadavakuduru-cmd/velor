@@ -26,6 +26,10 @@ export interface SportsApiProTeam {
   nameCode?: string | null;
   slug?: string | null;
   country?: { name?: string | null; alpha2?: string | null } | null;
+  gender?: string | null;
+  national?: boolean | null;
+  category?: SportsApiProTournamentCategory | null;
+  primaryUniqueTournament?: { name?: string | null } | null;
   teamColors?: { primary?: string | null; secondary?: string | null } | null;
   sport?: SportsApiProSportRef | null;
 }
@@ -80,16 +84,8 @@ export interface SportsApiProEvent {
   slug?: string | null;
 }
 
-export interface SportsApiProSearchEntity {
-  id?: number | string | null;
-  name?: string | null;
-  nameCode?: string | null;
-  country?: { name?: string | null } | null;
-  sport?: SportsApiProSportRef | null;
-}
-
 export interface SportsApiProSearchResult {
-  entity?: SportsApiProSearchEntity | null;
+  entity?: SportsApiProTeam | null;
   type?: string | null;
 }
 

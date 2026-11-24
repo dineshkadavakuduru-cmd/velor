@@ -8,6 +8,7 @@ import FavoriteButton from "@/components/favorites/FavoriteButton";
 import LiveHeader from "@/components/live/LiveHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import EntityImage from "@/components/ui/EntityImage";
+import { entityHref } from "@/lib/utils/entityIdentity";
 
 type FilterType = "all" | "teams" | "leagues" | "matches";
 
@@ -84,11 +85,11 @@ export default function FavoritesPage() {
                 <div className="space-y-2">
                   {visibleTeams.map((team) => (
                     <div
-                      key={team.id}
+                      key={`${team.sportId ?? ""}:${team.id}`}
                       className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border-subtle"
                     >
                       <Link
-                        href={`/team/${team.id}`}
+                        href={entityHref("team", team.id, team.sportId)}
                         className="flex items-center gap-3 min-w-0"
                       >
                         <EntityImage
@@ -124,11 +125,11 @@ export default function FavoritesPage() {
                 <div className="space-y-2">
                   {visibleLeagues.map((league) => (
                     <div
-                      key={league.id}
+                      key={`${league.sportId ?? ""}:${league.id}`}
                       className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border-subtle"
                     >
                       <Link
-                        href={`/league/${league.id}`}
+                        href={entityHref("league", league.id, league.sportId)}
                         className="flex items-center gap-3 min-w-0"
                       >
                         <EntityImage
@@ -164,11 +165,11 @@ export default function FavoritesPage() {
                 <div className="space-y-2">
                   {visibleMatches.map((match) => (
                     <div
-                      key={match.id}
+                      key={`${match.sportId ?? ""}:${match.id}`}
                       className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border-subtle"
                     >
                       <Link
-                        href={`/match/${match.id}`}
+                        href={entityHref("match", match.id, match.sportId)}
                         className="flex items-center gap-3 min-w-0"
                       >
                         <EntityImage

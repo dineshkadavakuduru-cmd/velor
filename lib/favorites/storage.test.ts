@@ -2,10 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import {
   loadFavorites,
+  saveFavorites,
   toggleFavorite,
   isFavorite,
 } from "./storage";
 import type { FavoritesStore, FavoriteItem } from "./types";
+import { entityHref } from "../utils/entityIdentity";
 
 const localStorageKey = "velor_favorites_v1";
 
@@ -47,6 +49,19 @@ function withMockLocalStorage(data: unknown, fn: () => void) {
 }
 
 describe("favorites storage", () => {
+  it("reopens a saved team and match in their original sports after reload", () => {
+    const team: FavoriteItem = { id: "51614", type: "team", name: "Belgium", sportId: "basketball" };
+    const match: FavoriteItem = { id: "123", type: "match", name: "Belgium vs Italy", sportId: "football" };
+    withMockLocalStorage(null, () => {
+      saveFavorites(toggleFavorite(toggleFavorite(loadFavorites(), team), match));
+      const restored = loadFavorites();
+      assert.deepStrictEqual(restored.teams, [team]);
+      assert.deepStrictEqual(restored.matches, [match]);
+      assert.equal(entityHref(restored.teams[0].type, restored.teams[0].id, restored.teams[0].sportId), "/team/51614?sport=basketball");
+      assert.equal(entityHref(restored.matches[0].type, restored.matches[0].id, restored.matches[0].sportId), "/match/123?sport=football");
+    });
+  });
+
   it("returns empty store when localStorage is empty", () => {
     withMockLocalStorage(null, () => {
       const store = loadFavorites();

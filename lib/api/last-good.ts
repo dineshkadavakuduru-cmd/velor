@@ -28,6 +28,8 @@ interface LastGoodEntry {
 }
 
 const store = new Map<string, LastGoodEntry>();
+const liveRequests = new Map<string, Promise<LastGoodEntry>>();
+export const LIVE_CACHE_SECONDS = 60;
 
 /** In-memory cache TTL for last-known-good payloads. */
 export const LAST_GOOD_MAX_AGE_MS =
@@ -55,10 +57,38 @@ export interface LastGoodFetchOptions<T> {
   run: () => Promise<T>;
   /** How long a fallback payload stays servable. */
   maxAgeMs?: number;
+  /** Opt-in, blocking expiry for mutable scores; callers must bypass Next's fetch cache. */
+  freshForMs?: number;
 }
 
 export async function fetchWithLastGood<T>(options: LastGoodFetchOptions<T>): Promise<T> {
   const key = `${options.provider}:${options.endpoint}`;
+  if (options.freshForMs !== undefined) {
+    const previous = store.get(key);
+    if (previous && Date.now() - previous.storedAt < options.freshForMs) {
+      observations.getStore()?.set(key, previous.storedAt);
+      return previous.data as T;
+    }
+    let pending = liveRequests.get(key);
+    if (!pending) {
+      pending = Promise.resolve().then(async () => {
+        const entry = { data: await options.run(), storedAt: Date.now() };
+        store.set(key, entry);
+        return entry;
+      }).finally(() => liveRequests.delete(key));
+      liveRequests.set(key, pending);
+    }
+    try {
+      const entry = await pending;
+      observations.getStore()?.set(key, entry.storedAt);
+      return entry.data as T;
+    } catch (error) {
+      if (!previous || Date.now() - previous.storedAt > (options.maxAgeMs ?? LAST_GOOD_MAX_AGE_MS)) throw error;
+      staleCollector.getStore()?.add(key);
+      observations.getStore()?.set(key, previous.storedAt);
+      return previous.data as T;
+    }
+  }
   try {
     const data = await options.run();
     if (isWorthCaching(data)) {
@@ -76,14 +106,15 @@ export async function fetchWithLastGood<T>(options: LastGoodFetchOptions<T>): Pr
 }
 
 const staleCollector = new AsyncLocalStorage<Set<string>>();
+const observations = new AsyncLocalStorage<Map<string, number>>();
 
 /**
  * Collect endpoint keys served from the last-good fallback **within this
  * request only**. Runs fetches in an AsyncLocalStorage context so
  * concurrent requests are isolated from each other.
  */
-export function runWithStaleCollection<T>(store: Set<string>, fn: () => Promise<T>): Promise<T> {
-  return staleCollector.run(store, fn);
+export function runWithStaleCollection<T>(store: Set<string>, fn: () => Promise<T>, observed?: Map<string, number>): Promise<T> {
+  return observed ? observations.run(observed, () => staleCollector.run(store, fn)) : staleCollector.run(store, fn);
 }
 
 // --- Test hooks (not used by application code) -----------------------------

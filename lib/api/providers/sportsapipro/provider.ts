@@ -16,6 +16,7 @@ import type {
   SearchParams,
 } from "../../types";
 import { SportsApiError } from "../../error";
+import { entityHref, teamSubtitle } from "../../../utils/entityIdentity";
 import {
   extractEntity,
   extractEvents,
@@ -348,27 +349,36 @@ export class SportsApiProProvider implements SportsProvider {
     const entities = await this.searchEntities(query);
     const limit = params.limit ?? 10;
     const results: SearchResult[] = [];
-    const sportLabel = this.config.sportName;
+    const seen = new Set<string>();
 
     for (const result of entities) {
       if (results.length >= limit) break;
       const entity = result.entity;
-      if (!entity || entity.id == null) continue;
+      if (!entity || entity.id == null || (result.type !== "team" && result.type !== "player")) continue;
+      const id = String(entity.id);
+      const key = `${result.type}:${id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // The gateway can repeat results with no declared sport across hosts.
+      const sportId = entity.sport?.slug ? this.config.sportId : undefined;
       if (result.type === "team") {
+        const team = normalizeSportsApiProTeam(entity, this.config.sportId);
         results.push({
           type: "team",
-          id: String(entity.id),
-          name: entity.name ?? "Unknown",
-          subtitle: `${sportLabel} · ${optional(entity.country?.name)}`,
-          href: `/team/${entity.id}`,
+          id,
+          name: team.name,
+          sportId,
+          subtitle: teamSubtitle({ ...team, sportId }),
+          href: entityHref("team", id, sportId),
         });
       } else if (result.type === "player") {
         results.push({
           type: "player",
-          id: String(entity.id),
+          id,
           name: entity.name ?? "Unknown",
-          subtitle: `${sportLabel} · ${optional(entity.country?.name)}`,
-          href: `/player/${entity.id}`,
+          sportId,
+          subtitle: [sportId && this.config.sportName, entity.country?.name].filter(Boolean).join(" · "),
+          href: entityHref("player", id, sportId),
         });
       }
     }

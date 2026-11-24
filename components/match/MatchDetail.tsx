@@ -12,6 +12,7 @@ import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { formatIST } from "@/lib/utils/freshness";
 import MatchTabs from "./MatchTabs";
 import Link from "next/link";
+import { entityHref } from "@/lib/utils/entityIdentity";
 
 interface MatchDetailProps {
   match: Match;
@@ -51,7 +52,7 @@ export default function MatchDetail({ match, stats, events, lineups }: MatchDeta
                 align="right"
                 showLogo={!!match.homeTeam.logo}
                 showShortName={true}
-                href={`/team/${match.homeTeam.id}`}
+                href={entityHref("team", match.homeTeam.id, match.sport.id)}
               />
             </div>
 
@@ -68,7 +69,7 @@ export default function MatchDetail({ match, stats, events, lineups }: MatchDeta
                 align="left"
                 showLogo={!!match.awayTeam.logo}
                 showShortName={true}
-                href={`/team/${match.awayTeam.id}`}
+                href={entityHref("team", match.awayTeam.id, match.sport.id)}
               />
             </div>
           </div>

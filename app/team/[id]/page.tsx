@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createRegistry } from "@/lib/api";
 import { findTeam } from "@/lib/api/lookup";
 import type { Match, Team, Standing, Player } from "@/lib/types/sports";
-import { validateTeamId } from "@/lib/api/validate";
+import { getFirstValue, validateTeamId } from "@/lib/api/validate";
 import TeamHeader from "@/components/team/TeamHeader";
 import TeamRecentMatches from "@/components/team/TeamRecentMatches";
 import TeamUpcomingMatches from "@/components/team/TeamUpcomingMatches";
@@ -16,7 +16,7 @@ interface TeamPageProps {
   searchParams?: Promise<{ sport?: string | string[] | undefined }>;
 }
 
-export async function generateMetadata({ params }: TeamPageProps): Promise<{ title: string; description: string }> {
+export async function generateMetadata({ params, searchParams }: TeamPageProps): Promise<{ title: string; description: string }> {
   const { id } = await params;
   const validId = validateTeamId(id);
 
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: TeamPageProps): Promise<{ tit
 
   try {
     const registry = createRegistry();
-    const result = await findTeam(registry, validId);
+    const result = await findTeam(registry, validId, getFirstValue((await searchParams)?.sport));
     if (!result) {
       return { title: "Team Not Found — VELOR", description: "Team not found." };
     }
@@ -102,8 +102,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
   try {
     const registry = createRegistry();
-    const sportParam = searchParams ? (await searchParams).sport : undefined;
-    const sportId = Array.isArray(sportParam) ? sportParam[0] : sportParam;
+    const sportId = getFirstValue((await searchParams)?.sport);
     providerResult = await findTeam(registry, validId, sportId);
     if (!providerResult) throw new Error("TEAM_NOT_FOUND");
     const provider = providerResult.provider;

@@ -19,6 +19,8 @@ export interface PerSportSync {
   errorKind?: string;
   /** True when payloads came from the last-known-good fallback (upstream unreachable). */
   servedUpstreamStale?: boolean;
+  syncedAt?: string;
+  partial?: boolean;
   matchCount: number;
   liveCount: number;
 }
@@ -51,7 +53,7 @@ export interface SportsSnapshot {
   /** True when at least one sport is being served a last-known-good payload — never a silent claim of fresh data. */
   upstreamStale: boolean;
   stats: SportsSnapshotStats;
-  /** ISO timestamp of when this snapshot was assembled (last successful sync). */
+  /** ISO timestamp of the oldest available score sample used by this snapshot. */
   syncedAt: string;
 }
 
@@ -73,6 +75,9 @@ export interface SportFetchInput {
    * The data is usable but NOT current — the UI must say so.
    */
   servedUpstreamStale?: boolean;
+  liveStale?: boolean;
+  fixturesStale?: boolean;
+  syncedAt?: string;
 }
 
 export function emptySnapshot(reason: "misconfigured" | "unavailable", syncedAt: string): SportsSnapshot {
@@ -211,13 +216,21 @@ export function assembleSnapshot(
   for (const input of inputs) {
     const { sportId, sportName, liveResult, fixturesResult, leaguesResult, teamsResult } = input;
 
-    // Merge live + general fixtures, deduped by id (live endpoint wins).
+    // Prefer fresh records. A current terminal fixture can settle a match
+    // even while the live endpoint still includes it.
     const sportMatches = new Map<string, Match>();
     if (fixturesResult.status === "fulfilled") {
       for (const m of fixturesResult.value) sportMatches.set(m.id, m);
     }
     if (liveResult.status === "fulfilled") {
-      for (const m of liveResult.value) sportMatches.set(m.id, m);
+      for (const m of liveResult.value) {
+        const fixture = sportMatches.get(m.id);
+        if (fixture) {
+          if (input.liveStale && !input.fixturesStale) continue;
+          if (!input.fixturesStale && fixture.status === "finished" && isLiveMatch(m)) continue;
+        }
+        sportMatches.set(m.id, m);
+      }
     }
     // Providers filter inconsistently (some ignore teamId/leagueId/date,
     // live endpoints ignore every filter), so enforce the requested
@@ -262,6 +275,8 @@ export function assembleSnapshot(
         sportName,
         state: "ok",
         servedUpstreamStale: input.servedUpstreamStale === true,
+        syncedAt: input.syncedAt,
+        partial: !liveOk || !matchesOk,
         matchCount: contributed.length,
         liveCount: contributed.filter(isLiveMatch).length,
       });
